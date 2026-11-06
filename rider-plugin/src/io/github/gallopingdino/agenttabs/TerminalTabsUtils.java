@@ -1,4 +1,4 @@
-package com.kingbirdgames.agenttabs;
+package io.github.gallopingdino.agenttabs;
 
 import com.intellij.ide.impl.ProjectUtil;
 import com.intellij.openapi.fileEditor.FileEditorManager;

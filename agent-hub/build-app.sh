@@ -35,7 +35,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key><string>Agent Hub</string>
-    <key>CFBundleIdentifier</key><string>com.kingbirdgames.agenthub</string>
+    <key>CFBundleIdentifier</key><string>io.github.gallopingdino.agenthub</string>
     <key>CFBundleExecutable</key><string>AgentHubBar</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>0.1.0</string>

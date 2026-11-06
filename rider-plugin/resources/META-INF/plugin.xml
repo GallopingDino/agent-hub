@@ -1,7 +1,7 @@
 <idea-plugin>
-  <id>com.kingbirdgames.agenttabs</id>
+  <id>io.github.gallopingdino.agenttabs</id>
   <name>Agent Tabs</name>
-  <vendor>KingBird Games</vendor>
+  <vendor>GallopingDino</vendor>
   <version>0.4.0</version>
   <description>Local HTTP API to list, focus and open terminal tabs in Rider project windows.</description>
   <idea-version since-build="262"/>
@@ -12,6 +12,6 @@
   </dependencies>
 
   <extensions defaultExtensionNs="com.intellij">
-    <httpRequestHandler implementation="com.kingbirdgames.agenttabs.AgentTabsRestService"/>
+    <httpRequestHandler implementation="io.github.gallopingdino.agenttabs.AgentTabsRestService"/>
   </extensions>
 </idea-plugin>

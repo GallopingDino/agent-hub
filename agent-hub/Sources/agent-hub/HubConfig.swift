@@ -6,7 +6,7 @@ struct HubConfig: Decodable {
     let openableExtensions: [String]
 
     static let fallback = HubConfig(
-        cloneRoots: ["~/Documents/Unity/KingBirdGames", "~/Documents/Unity/KingBirdGames/Parallel"],
+        cloneRoots: [],
         staleAfterHours: 24,
         openableExtensions: ["cs", "md", "json", "yaml", "yml", "asmdef", "asmref", "shader", "hlsl", "cginc", "uxml", "uss", "txt", "xml", "sh", "py"]
     )

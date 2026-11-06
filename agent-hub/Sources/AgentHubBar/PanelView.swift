@@ -751,15 +751,18 @@ private struct FlowLayout: Layout {
 
 enum ProjectPalette {
     private static let hues: [Double] = [0.58, 0.08, 0.36, 0.78, 0.97, 0.47, 0.14, 0.68, 0.25, 0.88, 0.52]
-    private static let hueByProject: [String: Double] = [
-        "AWay": 0.58, "BaseRun": 0.36, "TowerKing": 0.08, "SpaceInc": 0.78, "Cafe": 0.97,
-        "RaceMith": 0.47, "Zuma": 0.14, "Kingdom": 0.68, "GalaxyGuardians": 0.88, "DiggyDogPuzzle": 0.25,
-    ]
+    private static let hueByProject = loadHueByProject()
 
     // Parallel clones share their main project's colour.
     static func color(for cloneName: String) -> Color {
         let project = cloneName.replacingOccurrences(of: "-parallel", with: "")
         return Color(hue: hueByProject[project] ?? hashedHue(project), saturation: 0.6, brightness: 0.85)
+    }
+
+    private static func loadHueByProject() -> [String: Double] {
+        let configFile = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/agent-hub/config.json")
+        guard let data = try? Data(contentsOf: configFile) else { return [:] }
+        return (try? JSONDecoder().decode(PaletteConfig.self, from: data))?.projectHues ?? [:]
     }
 
     private static func hashedHue(_ project: String) -> Double {
@@ -769,6 +772,10 @@ enum ProjectPalette {
         }
         return hues[Int(hash % UInt64(hues.count))]
     }
+}
+
+private struct PaletteConfig: Decodable {
+    let projectHues: [String: Double]
 }
 
 enum IdleFormatter {

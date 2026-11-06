@@ -1,4 +1,4 @@
-package com.kingbirdgames.agenttabs;
+package io.github.gallopingdino.agenttabs;
 
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
