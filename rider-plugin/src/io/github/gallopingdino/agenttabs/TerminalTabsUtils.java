@@ -153,7 +153,7 @@ final class TerminalTabsUtils {
         return quoted.append('"').toString();
     }
 
-    private static Long findShellPid(TerminalToolWindowTab tab) {
+    static Long findShellPid(TerminalToolWindowTab tab) {
         Deferred<TerminalStartupOptions> startupOptions = tab.getView().getStartupOptionsDeferred();
         if (startupOptions.isCompleted() == false)
             return null;
