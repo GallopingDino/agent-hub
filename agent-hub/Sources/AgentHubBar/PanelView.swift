@@ -207,13 +207,10 @@ private struct PanelHeader: View {
 
 private struct SettingsMenu: View {
     @ObservedObject var model: PanelModel
-    @State private var presenter: SettingsMenuPresenter?
 
     var body: some View {
         Button {
-            let menuPresenter = presenter ?? SettingsMenuPresenter(model: model)
-            presenter = menuPresenter
-            menuPresenter.show()
+            model.showSettingsMenu()
         } label: {
             if model.isWakingUpAgents {
                 ProgressView().controlSize(.small).scaleEffect(0.7)
@@ -355,6 +352,8 @@ private struct GroupCard: View {
                     .focused($isNameFieldFocused)
                     .onSubmit(commitRename)
                     .onExitCommand { isRenaming = false }
+                    .onAppear { model.isEditingName = true }
+                    .onDisappear { model.isEditingName = false }
                     .frame(maxWidth: 220)
             }
             else {
@@ -459,6 +458,8 @@ private struct SessionRow: View {
                 .focused($isNameFieldFocused)
                 .onSubmit(commitRename)
                 .onExitCommand { isRenaming = false }
+                .onAppear { model.isEditingName = true }
+                .onDisappear { model.isEditingName = false }
                 .onChange(of: isNameFieldFocused) { _, isFocused in
                     if isFocused == false { isRenaming = false }
                 }

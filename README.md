@@ -18,7 +18,7 @@ Nothing in it is tied to Rider. The panel talks to a small CLI, and the CLI talk
 - Reopening a project in Rider resumes the Claude Code and Codex sessions it had in its terminal tabs.
 - Shows how much of the 5-hour and weekly limits Claude Code and Codex have left, and wakes sleeping agents with one short request outside any project.
 - Renames sessions, groups them by task or project, opens the last artifact an agent published.
-- Global hot key Control-Option-Command-H; Control-R refreshes, Esc closes.
+- Global hot key Control-Option-Command-H; while the panel is open, R refreshes, S opens settings, Esc closes.
 
 ## Parts
 

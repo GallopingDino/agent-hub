@@ -9,6 +9,9 @@ final class StatusItemController: NSObject {
     private static let panelWidth: CGFloat = 480
     private static let gapBelowMenuBar: CGFloat = 6
     private static let cornerRadius: CGFloat = 20
+    private static let headerInset: CGFloat = 22
+    private static let headerTopPadding: CGFloat = 12
+    private static let headerButtonDiameter: CGFloat = 26
 
     private let model: PanelModel
     private let statusItem: NSStatusItem
@@ -18,6 +21,7 @@ final class StatusItemController: NSObject {
     private var outsideClickMonitor: Any?
     private var escapeHotKey: GlobalHotKey?
     private var refreshHotKey: GlobalHotKey?
+    private var settingsHotKey: GlobalHotKey?
     private var panelTop: CGFloat = 0
 
     init(model: PanelModel) {
@@ -34,6 +38,10 @@ final class StatusItemController: NSObject {
         model.$status
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.updateStatusButton() }
+            .store(in: &subscriptions)
+        model.$isEditingName
+            .receive(on: RunLoop.main)
+            .sink { [weak self] isEditing in self?.updateLetterHotKeys(isEditingName: isEditing) }
             .store(in: &subscriptions)
     }
 
@@ -105,12 +113,7 @@ final class StatusItemController: NSObject {
         escapeHotKey = GlobalHotKey(keyCode: kVK_Escape, modifiers: 0) {
             DispatchQueue.main.async { [weak self] in self?.hidePanel() }
         }
-        refreshHotKey = GlobalHotKey(keyCode: kVK_ANSI_R, modifiers: controlKey) {
-            DispatchQueue.main.async { [weak self] in
-                guard let model = self?.model else { return }
-                Task { await model.refresh() }
-            }
-        }
+        updateLetterHotKeys(isEditingName: model.isEditingName)
         outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             Task { @MainActor in self?.hidePanel() }
         }
@@ -122,11 +125,39 @@ final class StatusItemController: NSObject {
         statusItem.button?.highlight(false)
         model.panelDidClose()
         escapeHotKey = nil
-        refreshHotKey = nil
+        updateLetterHotKeys(isEditingName: model.isEditingName)
         if let outsideClickMonitor {
             NSEvent.removeMonitor(outsideClickMonitor)
         }
         outsideClickMonitor = nil
+    }
+
+    // R refreshes and S opens the settings menu, only while the panel is shown and no name is being typed.
+    private func updateLetterHotKeys(isEditingName: Bool) {
+        guard panel.isVisible, isEditingName == false else {
+            refreshHotKey = nil
+            settingsHotKey = nil
+            return
+        }
+        guard refreshHotKey == nil else { return }
+
+        refreshHotKey = GlobalHotKey(keyCode: kVK_ANSI_R, modifiers: 0) {
+            DispatchQueue.main.async { [weak self] in
+                guard let model = self?.model else { return }
+                Task { await model.refresh() }
+            }
+        }
+        settingsHotKey = GlobalHotKey(keyCode: kVK_ANSI_S, modifiers: 0) {
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.model.showSettingsMenu(at: self.findSettingsMenuPoint())
+            }
+        }
+    }
+
+    // Under the settings button, which sits in the header's top-right corner.
+    private func findSettingsMenuPoint() -> NSPoint {
+        NSPoint(x: panel.frame.maxX - Self.headerInset - Self.headerButtonDiameter, y: panel.frame.maxY - Self.headerTopPadding - Self.headerButtonDiameter - 4)
     }
 
     // The list grows and shrinks with its content; keep the top edge pinned under the icon.

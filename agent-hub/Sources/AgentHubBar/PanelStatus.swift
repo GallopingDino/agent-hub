@@ -77,7 +77,7 @@ struct PanelAgentUsage: Decodable {
         if let error {
             return error.prefix(1).uppercased() + error.dropFirst()
         }
-        let fiveHourText = fiveHour.map { "5h \($0.percentLeft)% left" } ?? "No session"
+        let fiveHourText = fiveHour.map { "5h \($0.percentLeft)% left until \($0.resetsAt.formatted(date: .omitted, time: .shortened))" } ?? "No session"
         let weeklyText = weekly.map { "week \($0.percentLeft)% left" } ?? "week unknown"
         return "\(fiveHourText) · \(weeklyText)"
     }

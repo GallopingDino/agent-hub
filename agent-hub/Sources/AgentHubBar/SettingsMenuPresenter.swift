@@ -3,13 +3,13 @@ import AppKit
 // A native NSMenu keeps the trigger button styled like the other glass buttons; SwiftUI's Menu draws its own bezel.
 @MainActor
 final class SettingsMenuPresenter: NSObject {
-    private let model: PanelModel
+    private unowned let model: PanelModel
 
     init(model: PanelModel) {
         self.model = model
     }
 
-    func show() {
+    func show(at point: NSPoint?) {
         let menu = NSMenu()
         addUsageItems(to: menu)
         menu.addItem(.separator())
@@ -33,7 +33,7 @@ final class SettingsMenuPresenter: NSObject {
         menu.addItem(.separator())
         menu.addItem(makeItem("Quit Agent Hub", #selector(quit)))
 
-        menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
+        menu.popUp(positioning: nil, at: point ?? NSEvent.mouseLocation, in: nil)
     }
 
     private func addUsageItems(to menu: NSMenu) {

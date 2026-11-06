@@ -22,9 +22,12 @@ final class PanelModel: ObservableObject {
     @Published private(set) var isRefreshing = false
     @Published private(set) var usage: [PanelAgentUsage] = []
     @Published private(set) var isWakingUpAgents = false
+    // While a name is typed, the panel's letter shortcuts must not swallow the keys.
+    @Published var isEditingName = false
 
     private var isPanelOpen = false
     private var refreshLoop: Task<Void, Never>?
+    private lazy var settingsMenu = SettingsMenuPresenter(model: self)
 
     var onLeavingForEditor: (() -> Void)?
 
@@ -73,6 +76,11 @@ final class PanelModel: ObservableObject {
             usage = fresh
         }
         isRefreshing = false
+    }
+
+    // Without a point the menu opens at the mouse, as for a click on its button.
+    func showSettingsMenu(at point: NSPoint? = nil) {
+        settingsMenu.show(at: point)
     }
 
     func wakeUpAgents() {
