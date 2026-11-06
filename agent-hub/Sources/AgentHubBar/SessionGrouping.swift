@@ -19,14 +19,14 @@ enum GroupingMode: String, CaseIterable, Identifiable {
 }
 
 struct SessionGroup: Identifiable {
-    static let forgottenId = "forgotten"
+    static let inactiveId = "inactive"
 
     let id: String
     let title: String
     let sessions: [PanelSession]
     let isReorderable: Bool
 
-    var isForgotten: Bool { id == Self.forgottenId }
+    var isInactive: Bool { id == Self.inactiveId }
 }
 
 enum SessionGrouping {
@@ -48,7 +48,7 @@ enum SessionGrouping {
             groups = makeKeyedGroups(active, key: taskKey, title: \.title, savedOrder: savedOrder)
         }
 
-        groups.append(SessionGroup(id: SessionGroup.forgottenId, title: "Forgotten", sessions: stale, isReorderable: false))
+        groups.append(SessionGroup(id: SessionGroup.inactiveId, title: "Inactive", sessions: stale, isReorderable: false))
         return groups.filter { $0.sessions.isEmpty == false }
     }
 

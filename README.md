@@ -12,7 +12,7 @@ Nothing in it is tied to Rider. The panel talks to a small CLI, and the CLI talk
 
 ## What it does
 
-- Lists every Claude Code session on the machine, grouped by state: needs you, working, idle, forgotten.
+- Lists every Claude Code session on the machine, grouped by state: needs you, working, idle, inactive.
 - Opens the agent's terminal tab in the right Rider window, or the files it changed for review.
 - Brings the Unity Editor of that project to the front, so switching projects switches both editors.
 - Renames sessions, groups them by task or project, opens the last artifact an agent published.

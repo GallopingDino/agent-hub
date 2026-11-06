@@ -6,7 +6,7 @@ struct PanelView: View {
 
     @ObservedObject var model: PanelModel
     @State private var listHeight: CGFloat = 120
-    @State private var isForgottenExpanded = false
+    @State private var isInactiveExpanded = false
     @State private var cardFrames: [String: CGRect] = [:]
     @State private var drag: GroupDrag?
 
@@ -79,7 +79,7 @@ struct PanelView: View {
         return GroupCard(
             group: group,
             model: model,
-            isForgottenExpanded: $isForgottenExpanded,
+            isInactiveExpanded: $isInactiveExpanded,
             isDragged: isDragged,
             isMergeTarget: isMergeTarget,
             onDragChanged: { value in drag = GroupDrag(groupId: group.id, translation: value.translation.height, pointerY: value.location.y) },
@@ -248,7 +248,7 @@ private struct GroupCard: View {
 
     let group: SessionGroup
     @ObservedObject var model: PanelModel
-    @Binding var isForgottenExpanded: Bool
+    @Binding var isInactiveExpanded: Bool
     let isDragged: Bool
     let isMergeTarget: Bool
     let onDragChanged: (DragGesture.Value) -> Void
@@ -282,19 +282,19 @@ private struct GroupCard: View {
             }
         }
         .scaleEffect(isDragged ? 1.02 : 1)
-        .opacity(group.isForgotten ? 0.85 : 1)
+        .opacity(group.isInactive ? 0.85 : 1)
     }
 
-    private var isCollapsed: Bool { group.isForgotten && isForgottenExpanded == false }
+    private var isCollapsed: Bool { group.isInactive && isInactiveExpanded == false }
 
     @ViewBuilder
     private var header: some View {
         let row = HStack(spacing: 7) {
-            if group.isForgotten {
+            if group.isInactive {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(.secondary)
-                    .rotationEffect(.degrees(isForgottenExpanded ? 90 : 0))
+                    .rotationEffect(.degrees(isInactiveExpanded ? 90 : 0))
             }
             else if group.isReorderable {
                 Image(systemName: "line.3.horizontal")
@@ -309,8 +309,8 @@ private struct GroupCard: View {
         .frame(height: Self.headerHeight)
         .contentShape(Rectangle())
 
-        if group.isForgotten {
-            row.onTapGesture { withAnimation(.easeOut(duration: 0.18)) { isForgottenExpanded.toggle() } }
+        if group.isInactive {
+            row.onTapGesture { withAnimation(.easeOut(duration: 0.18)) { isInactiveExpanded.toggle() } }
         }
         else if group.isReorderable {
             row
