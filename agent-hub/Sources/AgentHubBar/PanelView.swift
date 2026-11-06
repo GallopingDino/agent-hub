@@ -31,6 +31,7 @@ struct PanelView: View {
             }
         }
         .frame(width: 480)
+        .focusEffectDisabled()
         .animation(.easeOut(duration: 0.2), value: model.notice)
         .onAppear { model.panelDidOpen() }
         .onDisappear { model.panelDidClose() }
@@ -223,28 +224,17 @@ private struct PanelHeader: View {
 
 private struct SettingsMenu: View {
     @ObservedObject var model: PanelModel
+    @State private var presenter: SettingsMenuPresenter?
 
     var body: some View {
-        Menu {
-            Picker("Group by", selection: $model.groupingMode) {
-                ForEach(GroupingMode.allCases) { Text($0.title).tag($0) }
-            }
-            .pickerStyle(.inline)
-            Button("Reset group order") { model.resetGroupOrder() }
-                .disabled(model.groupingMode.isReorderable == false)
-            Divider()
-            Toggle("Open edited files on focus", isOn: $model.isOpeningEditedFilesOnFocus)
-            Divider()
-            Button("Quit Agent Hub") { NSApplication.shared.terminate(nil) }
+        Button {
+            let menuPresenter = presenter ?? SettingsMenuPresenter(model: model)
+            presenter = menuPresenter
+            menuPresenter.show()
         } label: {
             Image(systemName: "slider.horizontal.3")
-                .font(.system(size: 12, weight: .medium))
-                .frame(width: 28, height: 28)
-                .glassCircle()
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
+        .buttonStyle(GlassIconButtonStyle(diameter: 28))
         .help("Grouping and settings")
     }
 }
