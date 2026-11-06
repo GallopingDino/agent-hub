@@ -20,6 +20,8 @@ final class PanelModel: ObservableObject {
     @Published private(set) var status: PanelStatus?
     @Published private(set) var notice: String?
     @Published private(set) var isRefreshing = false
+    @Published private(set) var usage: [PanelAgentUsage] = []
+    @Published private(set) var isWakingUpAgents = false
 
     private var isPanelOpen = false
     private var refreshLoop: Task<Void, Never>?
@@ -28,6 +30,14 @@ final class PanelModel: ObservableObject {
 
     var attentionCount: Int {
         status?.sessions.filter(\.isNeedingUser).count ?? 0
+    }
+
+    var isAnyAgentAsleep: Bool {
+        usage.contains(where: \.isAsleep)
+    }
+
+    var isAnyAgentRunningLow: Bool {
+        usage.contains(where: \.isRunningLow)
     }
 
     var groups: [SessionGroup] {
@@ -54,10 +64,27 @@ final class PanelModel: ObservableObject {
     func refresh() async {
         guard isRefreshing == false else { return }
         isRefreshing = true
-        if let fresh = await HubClient.fetchStatus() {
+        async let freshStatus = HubClient.fetchStatus()
+        async let freshUsage = HubClient.fetchUsage(isBypassingCache: false)
+        if let fresh = await freshStatus {
             status = fresh
         }
+        if let fresh = await freshUsage {
+            usage = fresh
+        }
         isRefreshing = false
+    }
+
+    func wakeUpAgents() {
+        guard isWakingUpAgents == false else { return }
+        isWakingUpAgents = true
+        Task {
+            showNotice(await HubClient.wakeUpAgents())
+            if let fresh = await HubClient.fetchUsage(isBypassingCache: true) {
+                usage = fresh
+            }
+            isWakingUpAgents = false
+        }
     }
 
     func showAgent(_ session: PanelSession) {

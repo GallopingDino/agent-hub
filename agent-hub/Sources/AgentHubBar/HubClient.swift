@@ -23,6 +23,21 @@ enum HubClient {
         }
     }
 
+    static func fetchUsage(isBypassingCache: Bool) async -> [PanelAgentUsage]? {
+        guard let output = await run(["usage", "--json"] + (isBypassingCache ? ["--fresh"] : [])).output else { return nil }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try? decoder.decode([PanelAgentUsage].self, from: output)
+    }
+
+    // Returns nil on success, otherwise one line per agent that stayed asleep.
+    static func wakeUpAgents() async -> String? {
+        let result = await run(["wake-up"])
+        guard result.output == nil else { return nil }
+        let reason = result.errorText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return reason.isEmpty ? "could not wake up the agents" : reason
+    }
+
     static func showAgent(_ session: PanelSession, isOpeningEditedFiles: Bool) async {
         _ = await run([isOpeningEditedFiles ? "review" : "focus", String(session.pid)]).output
     }

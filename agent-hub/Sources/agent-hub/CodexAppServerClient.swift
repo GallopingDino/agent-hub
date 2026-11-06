@@ -1,5 +1,10 @@
 import Foundation
 
+struct CodexRateLimits {
+    let fiveHour: UsageWindow?
+    let weekly: UsageWindow?
+}
+
 struct CodexThread {
     let id: String
     let cwd: String
@@ -73,6 +78,18 @@ final class CodexAppServerClient {
 
     func setThreadName(_ threadId: String, to name: String) -> Bool {
         call("thread/name/set", ["threadId": threadId, "name": name]) != nil
+    }
+
+    func readRateLimits() -> CodexRateLimits? {
+        guard let result = call("account/rateLimits/read", [:]), let limits = result["rateLimits"] as? [String: Any] else { return nil }
+        return CodexRateLimits(fiveHour: readRateLimitWindow(limits["primary"]), weekly: readRateLimitWindow(limits["secondary"]))
+    }
+
+    private func readRateLimitWindow(_ value: Any?) -> UsageWindow? {
+        guard let window = value as? [String: Any],
+              let usedPercent = (window["usedPercent"] as? NSNumber)?.intValue,
+              let resetsAt = (window["resetsAt"] as? NSNumber)?.doubleValue else { return nil }
+        return UsageWindow(usedPercent: usedPercent, resetsAt: Date(timeIntervalSince1970: resetsAt))
     }
 
     private func readThread(_ threadId: String) -> CodexThread? {

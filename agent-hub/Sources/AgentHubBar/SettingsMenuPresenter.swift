@@ -11,6 +11,9 @@ final class SettingsMenuPresenter: NSObject {
 
     func show() {
         let menu = NSMenu()
+        addUsageItems(to: menu)
+        menu.addItem(.separator())
+
         menu.addItem(makeHeader("Group by"))
         for mode in GroupingMode.allCases {
             let item = makeItem(mode.title, #selector(selectGroupingMode(_:)))
@@ -33,10 +36,29 @@ final class SettingsMenuPresenter: NSObject {
         menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
     }
 
+    private func addUsageItems(to menu: NSMenu) {
+        if model.isAnyAgentAsleep {
+            let wakeUp = makeItem("Wake Up Agents", #selector(wakeUpAgents))
+            wakeUp.isEnabled = model.isWakingUpAgents == false
+            menu.addItem(wakeUp)
+        }
+        if model.usage.isEmpty {
+            menu.addItem(makeInfoItem("Usage is loading…"))
+        }
+        for agentUsage in model.usage {
+            menu.addItem(makeHeader(agentUsage.agentName))
+            menu.addItem(makeInfoItem(agentUsage.summary))
+        }
+    }
+
     private func makeHeader(_ title: String) -> NSMenuItem {
         if #available(macOS 14, *) {
             return NSMenuItem.sectionHeader(title: title)
         }
+        return makeInfoItem(title)
+    }
+
+    private func makeInfoItem(_ title: String) -> NSMenuItem {
         let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
         item.isEnabled = false
         return item
@@ -46,6 +68,10 @@ final class SettingsMenuPresenter: NSObject {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
         item.target = self
         return item
+    }
+
+    @objc private func wakeUpAgents() {
+        model.wakeUpAgents()
     }
 
     @objc private func selectGroupingMode(_ sender: NSMenuItem) {

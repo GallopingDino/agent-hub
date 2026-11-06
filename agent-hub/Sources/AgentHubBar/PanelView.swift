@@ -215,10 +215,27 @@ private struct SettingsMenu: View {
             presenter = menuPresenter
             menuPresenter.show()
         } label: {
-            Image(systemName: "slider.horizontal.3")
+            if model.isWakingUpAgents {
+                ProgressView().controlSize(.small).scaleEffect(0.7)
+            }
+            else if model.isAnyAgentAsleep {
+                Image(systemName: "moon.zzz")
+            }
+            else if model.isAnyAgentRunningLow {
+                Image(systemName: "exclamationmark").foregroundStyle(.orange)
+            }
+            else {
+                Image(systemName: "slider.horizontal.3")
+            }
         }
         .buttonStyle(GlassIconButtonStyle(diameter: 26))
-        .help("Grouping and settings")
+        .help(helpText)
+    }
+
+    private var helpText: String {
+        if model.isAnyAgentAsleep { return "Usage and settings: an agent has no 5-hour session" }
+        if model.isAnyAgentRunningLow { return "Usage and settings: an agent has less than 20% of its 5-hour limit left" }
+        return "Usage and settings"
     }
 }
 

@@ -56,3 +56,36 @@ struct PanelClone: Decodable, Identifiable {
 
     var isRunning: Bool { unityPid != nil || isOpenInRider }
 }
+
+// Mirrors the `agent-hub usage --json` contract.
+struct PanelAgentUsage: Decodable {
+    private static let lowFiveHourPercentLeft = 20
+
+    let agent: String
+    let fiveHour: PanelUsageWindow?
+    let weekly: PanelUsageWindow?
+    let error: String?
+
+    // No 5-hour window is running, so the next request starts one.
+    var isAsleep: Bool { error == nil && fiveHour == nil }
+
+    var isRunningLow: Bool { (fiveHour?.percentLeft ?? 100) < Self.lowFiveHourPercentLeft }
+
+    var agentName: String { agent == "codex" ? "Codex" : "Claude Code" }
+
+    var summary: String {
+        if let error {
+            return error.prefix(1).uppercased() + error.dropFirst()
+        }
+        let fiveHourText = fiveHour.map { "5h \($0.percentLeft)% left" } ?? "No session"
+        let weeklyText = weekly.map { "week \($0.percentLeft)% left" } ?? "week unknown"
+        return "\(fiveHourText) · \(weeklyText)"
+    }
+}
+
+struct PanelUsageWindow: Decodable {
+    let usedPercent: Int
+    let resetsAt: Date
+
+    var percentLeft: Int { max(0, 100 - usedPercent) }
+}

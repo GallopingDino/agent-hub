@@ -6,6 +6,8 @@ agent-hub — status of Claude Code and Codex agents across local clones
 usage:
   agent-hub status [--json]       sessions, review queue, clones, open Unity editors
   agent-hub sessions --json       live agent sessions only, without Rider tabs (used by the Rider plugin)
+  agent-hub usage [--json] [--fresh]  5-hour and weekly limits of Claude Code and Codex (cached for a minute)
+  agent-hub wake-up               start a 5-hour window for each agent with one short request outside any project
   agent-hub focus <session>       show the agent's terminal tab in Rider
   agent-hub open-files <session>  open the agent's still-changed code files in Rider (no prefabs/scenes/assets)
   agent-hub review <session>      open-files, then focus
@@ -62,6 +64,21 @@ case "status":
 
 case "sessions":
     printJson(StatusBuilder.buildSessions(config: config, isLookingUpRiderTabs: false))
+
+case "usage":
+    let usage = AgentUsageReader.read(isBypassingCache: arguments.contains("--fresh"))
+    if arguments.contains("--json") {
+        printJson(usage)
+    }
+    else {
+        print(UsageTextRenderer.render(usage))
+    }
+
+case "wake-up":
+    let failures = AgentWaker.wakeUpAgents()
+    if failures.isEmpty == false {
+        exitWithError(failures.joined(separator: "\n"))
+    }
 
 case "focus", "open-files", "review", "open-artifact":
     guard arguments.count >= 2 else { exitWithError(usage) }

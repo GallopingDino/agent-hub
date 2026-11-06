@@ -10,7 +10,7 @@ public struct ChildProcessResult {
 
 // Foundation's Process costs ~70 ms per launch; posix_spawn costs ~2 ms.
 public enum ChildProcess {
-    public static func run(_ executable: String, _ arguments: [String]) -> ChildProcessResult? {
+    public static func run(_ executable: String, _ arguments: [String], workingDirectory: String? = nil) -> ChildProcessResult? {
         var outputPipe: [Int32] = [0, 0]
         var errorPipe: [Int32] = [0, 0]
         guard pipe(&outputPipe) == 0 else { return nil }
@@ -25,11 +25,18 @@ public enum ChildProcess {
         posix_spawn_file_actions_addopen(&fileActions, 0, "/dev/null", O_RDONLY, 0)
         posix_spawn_file_actions_adddup2(&fileActions, outputPipe[1], 1)
         posix_spawn_file_actions_adddup2(&fileActions, errorPipe[1], 2)
+        if let workingDirectory {
+            posix_spawn_file_actions_addchdir_np(&fileActions, workingDirectory)
+        }
 
         var attributes: posix_spawnattr_t?
         posix_spawnattr_init(&attributes)
         defer { posix_spawnattr_destroy(&attributes) }
-        posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_CLOEXEC_DEFAULT))
+        // A child inherits the spawning thread's signal mask, and GCD worker threads block signals some tools wait on.
+        var emptySignals = sigset_t()
+        sigemptyset(&emptySignals)
+        posix_spawnattr_setsigmask(&attributes, &emptySignals)
+        posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_CLOEXEC_DEFAULT | POSIX_SPAWN_SETSIGMASK))
 
         let argv: [UnsafeMutablePointer<CChar>?] = ([executable] + arguments).map { strdup($0) } + [nil]
         defer { argv.forEach { free($0) } }
