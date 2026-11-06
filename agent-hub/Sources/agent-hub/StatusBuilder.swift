@@ -1,8 +1,28 @@
 import Foundation
 
+private enum SessionSource {
+    case claude(ClaudeSessionRecord, artifactUrl: String?)
+    case codex(CodexSessionRecord)
+}
+
+// What every agent reports about one session, before it is placed into a clone, a Rider tab and a state.
+private struct ObservedSession {
+    let agent: AgentKind
+    let pid: Int32
+    let sessionId: String
+    let workingDirectory: String
+    let name: String?
+    let status: String?
+    let waitingFor: String?
+    let idleSeconds: Int
+    let lastMessage: AgentLastMessage?
+    let artifactUrl: String?
+}
+
 enum StatusBuilder {
     private static let maxParallelJobs = 4
     private static let previewLength = 140
+    private static let codexFallbackNameLength = 40
 
     static func build(config: HubConfig) -> HubStatus {
         let clonePaths = config.findClonePaths()
@@ -13,20 +33,23 @@ enum StatusBuilder {
         return HubStatus(generatedAt: Date(), isAgentTabsAvailable: tabs != nil, sessions: sessions, clones: clones)
     }
 
-    // Skips the per-clone git checks, which take most of the time of build().
-    static func buildSessions(config: HubConfig) -> [AgentSession] {
-        buildSessions(clonePaths: config.findClonePaths(), processTable: ProcessTable(), tabs: AgentTabsClient.listTabs() ?? [], config: config)
+    // Skips the per-clone git checks, which take most of the time of build(). The Rider plugin itself asks without
+    // tab lookup: that lookup calls back into the plugin and would wait on the thread that is waiting for this answer.
+    static func buildSessions(config: HubConfig, isLookingUpRiderTabs: Bool = true) -> [AgentSession] {
+        let tabs = isLookingUpRiderTabs ? AgentTabsClient.listTabs() ?? [] : []
+        return buildSessions(clonePaths: config.findClonePaths(), processTable: ProcessTable(), tabs: tabs, config: config)
     }
 
     private static func buildSessions(clonePaths: [String], processTable: ProcessTable, tabs: [RiderTerminalTab], config: HubConfig) -> [AgentSession] {
-        let records = ClaudeSessionReader.readLiveSessions()
-
+        let claudeRecords = ClaudeSessionReader.readLiveSessions()
         var artifactCache = ArtifactLinkCache()
-        let artifactUrls = records.map { artifactCache.findLatestArtifactUrl(of: $0) }
+        let claudeSources = claudeRecords.map { SessionSource.claude($0, artifactUrl: artifactCache.findLatestArtifactUrl(of: $0)) }
         artifactCache.save()
 
-        return parallelMap(Array(zip(records, artifactUrls))) { record, artifactUrl in
-            buildSession(record, artifactUrl: artifactUrl, clonePaths: clonePaths, tabs: tabs, processTable: processTable, config: config)
+        let codexSources = CodexSessionReader.readLiveSessions(processTable: processTable).map(SessionSource.codex)
+
+        return parallelMap(claudeSources + codexSources) { source in
+            buildSession(observe(source), clonePaths: clonePaths, tabs: tabs, processTable: processTable, config: config)
         }
         .sorted { ($0.state.sortOrder, $0.idleSeconds) < ($1.state.sortOrder, $1.idleSeconds) }
     }
@@ -55,29 +78,80 @@ enum StatusBuilder {
         return clones
     }
 
-    private static func buildSession(_ record: ClaudeSessionRecord, artifactUrl: String?, clonePaths: [String], tabs: [RiderTerminalTab], processTable: ProcessTable, config: HubConfig) -> AgentSession {
-        let workingDirectory = ProcessTable.normalize(record.cwd)
-        let clonePath = findClone(containing: workingDirectory, clonePaths: clonePaths)
-        let lastMessage = ClaudeSessionReader.readLastMessage(of: record)
-        let reviewFiles = collectStillChangedFiles(lastMessage?.reportedFiles ?? [], baseDirectory: clonePath ?? workingDirectory)
-        let tab = tabs.first { tab in tab.shellPid.map { processTable.isDescendant(record.pid, of: $0) } ?? false }
+    private static func observe(_ source: SessionSource) -> ObservedSession {
+        switch source {
+        case let .claude(record, artifactUrl):
+            return ObservedSession(
+                agent: .claude,
+                pid: record.pid,
+                sessionId: record.sessionId,
+                workingDirectory: record.cwd,
+                name: record.name,
+                status: record.status,
+                waitingFor: record.waitingFor,
+                idleSeconds: record.statusUpdatedAt.map { max(0, Int(Date().timeIntervalSince1970 - $0 / 1000)) } ?? 0,
+                lastMessage: ClaudeSessionReader.readLastMessage(of: record),
+                artifactUrl: artifactUrl
+            )
+        case let .codex(record):
+            let thread = record.thread
+            let (status, waitingFor) = translateCodexStatus(thread)
+            return ObservedSession(
+                agent: .codex,
+                pid: record.pid,
+                sessionId: thread.id,
+                workingDirectory: thread.cwd,
+                name: thread.name ?? thread.preview.flatMap(makeCodexFallbackName),
+                status: status,
+                waitingFor: waitingFor,
+                idleSeconds: max(0, Int(Date().timeIntervalSince1970 - thread.updatedAt)),
+                lastMessage: CodexSessionReader.readLastMessage(of: thread),
+                artifactUrl: nil
+            )
+        }
+    }
 
-        let idleSeconds = record.statusUpdatedAt.map { max(0, Int(Date().timeIntervalSince1970 - $0 / 1000)) } ?? 0
-        let state = classify(status: record.status, idleSeconds: idleSeconds, hasReviewFiles: reviewFiles.isEmpty == false, config: config)
+    // Maps Codex thread status onto the Claude Code status words that classify() understands.
+    private static func translateCodexStatus(_ thread: CodexThread) -> (status: String?, waitingFor: String?) {
+        switch thread.statusType {
+        case "active":
+            if thread.activeFlags.contains("waitingOnApproval") { return ("waiting", "approval") }
+            if thread.activeFlags.contains("waitingOnUserInput") { return ("waiting", "input needed") }
+            return ("busy", nil)
+        case "systemError":
+            return ("waiting", "error")
+        default:
+            return (nil, nil)
+        }
+    }
+
+    private static func makeCodexFallbackName(_ preview: String) -> String? {
+        let firstLine = preview.split(separator: "\n").first.map { $0.trimmingCharacters(in: .whitespaces) } ?? ""
+        guard firstLine.isEmpty == false else { return nil }
+        return firstLine.count > codexFallbackNameLength ? String(firstLine.prefix(codexFallbackNameLength)) + "…" : firstLine
+    }
+
+    private static func buildSession(_ observed: ObservedSession, clonePaths: [String], tabs: [RiderTerminalTab], processTable: ProcessTable, config: HubConfig) -> AgentSession {
+        let workingDirectory = ProcessTable.normalize(observed.workingDirectory)
+        let clonePath = findClone(containing: workingDirectory, clonePaths: clonePaths)
+        let reviewFiles = collectStillChangedFiles(observed.lastMessage?.reportedFiles ?? [], baseDirectory: clonePath ?? workingDirectory)
+        let tab = tabs.first { tab in tab.shellPid.map { processTable.isDescendant(observed.pid, of: $0) } ?? false }
+        let state = classify(status: observed.status, idleSeconds: observed.idleSeconds, hasReviewFiles: reviewFiles.isEmpty == false, config: config)
 
         return AgentSession(
-            sessionId: record.sessionId,
-            pid: record.pid,
-            name: record.name,
+            sessionId: observed.sessionId,
+            pid: observed.pid,
+            agent: observed.agent,
+            name: observed.name,
             workingDirectory: workingDirectory,
             clonePath: clonePath,
             cloneName: clonePath.map { ($0 as NSString).lastPathComponent },
             state: state,
-            waitingFor: record.status == "waiting" ? record.waitingFor : nil,
-            idleSeconds: idleSeconds,
-            lastMessagePreview: lastMessage.map { makePreview($0.text) },
+            waitingFor: observed.status == "waiting" ? observed.waitingFor : nil,
+            idleSeconds: observed.idleSeconds,
+            lastMessagePreview: observed.lastMessage.map { makePreview($0.text) },
             reviewFiles: reviewFiles,
-            artifactUrl: artifactUrl,
+            artifactUrl: observed.artifactUrl,
             riderProject: tab?.project,
             hasTerminalTab: tab != nil,
             unityPid: clonePath.flatMap { processTable.unityEditorPidByProject[$0] }

@@ -2,8 +2,8 @@
   <id>io.github.gallopingdino.agenttabs</id>
   <name>Agent Tabs</name>
   <vendor>GallopingDino</vendor>
-  <version>0.5.0</version>
-  <description>Local HTTP API to list, focus and open terminal tabs in Rider project windows. Resumes a project's Claude Code sessions in their terminal tabs when the project is reopened.</description>
+  <version>0.6.0</version>
+  <description>Local HTTP API to list, focus and open terminal tabs in Rider project windows. Resumes a project's Claude Code and Codex sessions in their terminal tabs when the project is reopened.</description>
   <idea-version since-build="262"/>
 
   <dependencies>
@@ -13,10 +13,10 @@
 
   <extensions defaultExtensionNs="com.intellij">
     <httpRequestHandler implementation="io.github.gallopingdino.agenttabs.AgentTabsRestService"/>
-    <postStartupActivity implementation="io.github.gallopingdino.agenttabs.ClaudeTabsRestorer"/>
+    <postStartupActivity implementation="io.github.gallopingdino.agenttabs.AgentTabsRestorer"/>
   </extensions>
 
   <applicationListeners>
-    <listener class="io.github.gallopingdino.agenttabs.ClaudeTabsCloseListener" topic="com.intellij.openapi.project.ProjectManagerListener"/>
+    <listener class="io.github.gallopingdino.agenttabs.AgentTabsCloseListener" topic="com.intellij.openapi.project.ProjectManagerListener"/>
   </applicationListeners>
 </idea-plugin>

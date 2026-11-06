@@ -4,8 +4,15 @@ enum SessionRenamer {
     private static let stashKey = "\u{13}"
     private static let confirmationTimeoutSeconds = 5.0
 
-    // Ctrl+S stashes any half-typed draft; Claude Code restores it by itself after /rename is submitted.
     static func rename(_ session: AgentSession, to newName: String) -> String? {
+        switch session.agent {
+        case .claude: return renameClaudeSession(session, to: newName)
+        case .codex: return CodexSessionReader.rename(session.sessionId, to: newName) ? nil : "the Codex app server did not accept the new name"
+        }
+    }
+
+    // Ctrl+S stashes any half-typed draft; Claude Code restores it by itself after /rename is submitted.
+    private static func renameClaudeSession(_ session: AgentSession, to newName: String) -> String? {
         switch session.state {
         case .waiting: return "the agent is waiting for an answer (\(session.waitingFor ?? "input")); typed text would answer it"
         default: break

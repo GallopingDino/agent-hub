@@ -12,10 +12,10 @@ Nothing in it is tied to Rider. The panel talks to a small CLI, and the CLI talk
 
 ## What it does
 
-- Lists every Claude Code session on the machine, grouped by state: needs you, working, idle, inactive.
+- Lists every Claude Code and Codex session on the machine, grouped by state: needs you, working, idle, inactive.
 - Opens the agent's terminal tab in the right Rider window, or the files it changed for review.
 - Brings the Unity Editor of that project to the front, so switching projects switches both editors.
-- Reopening a project in Rider resumes the Claude Code sessions it had in its terminal tabs.
+- Reopening a project in Rider resumes the Claude Code and Codex sessions it had in its terminal tabs.
 - Renames sessions, groups them by task or project, opens the last artifact an agent published.
 - Global hot key Control-Option-Command-H; Control-R refreshes, Esc closes.
 
@@ -31,7 +31,7 @@ agent-hub/build-app.sh      # builds and installs ~/Applications/Agent Hub.app a
 rider-plugin/build.sh       # builds rider-plugin/out/agent-tabs.jar; install it in Rider via "Install Plugin from Disk"
 ```
 
-Requires macOS 14+, Swift, Claude Code, and Rider for the editor features.
+Requires macOS 14+, Swift, Claude Code or Codex, and Rider for the editor features.
 
 ## Config
 

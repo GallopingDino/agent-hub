@@ -1,16 +1,17 @@
 import Foundation
 
 let usage = """
-agent-hub — status of Claude agents across local clones
+agent-hub — status of Claude Code and Codex agents across local clones
 
 usage:
   agent-hub status [--json]       sessions, review queue, clones, open Unity editors
+  agent-hub sessions --json       live agent sessions only, without Rider tabs (used by the Rider plugin)
   agent-hub focus <session>       show the agent's terminal tab in Rider
   agent-hub open-files <session>  open the agent's still-changed code files in Rider (no prefabs/scenes/assets)
   agent-hub review <session>      open-files, then focus
   agent-hub open-artifact <session>  open the last artifact the agent published
   agent-hub focus-unity <session|clone>  bring the clone's Unity editor to the front
-  agent-hub rename <session> <new name>  rename a Claude session by typing /rename into its tab
+  agent-hub rename <session> <new name>  rename a session (Claude Code: types /rename into its tab)
 
 <session> is a session name, a session id prefix or a pid.
 """
@@ -35,6 +36,13 @@ func exitWithError(_ message: String) -> Never {
     exit(1)
 }
 
+func printJson<T: Encodable>(_ value: T) {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+    encoder.dateEncodingStrategy = .iso8601
+    print(String(decoding: (try? encoder.encode(value)) ?? Data(), as: UTF8.self))
+}
+
 func report(_ reply: AgentTabsReply) {
     guard reply.ok else { exitWithError(reply.error ?? "Agent Tabs request failed") }
 }
@@ -46,14 +54,14 @@ switch arguments.first {
 case "status":
     let status = StatusBuilder.build(config: config)
     if arguments.contains("--json") {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-        encoder.dateEncodingStrategy = .iso8601
-        print(String(decoding: try encoder.encode(status), as: UTF8.self))
+        printJson(status)
     }
     else {
         print(StatusTableRenderer.render(status))
     }
+
+case "sessions":
+    printJson(StatusBuilder.buildSessions(config: config, isLookingUpRiderTabs: false))
 
 case "focus", "open-files", "review", "open-artifact":
     guard arguments.count >= 2 else { exitWithError(usage) }

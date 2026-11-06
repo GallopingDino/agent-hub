@@ -15,12 +15,13 @@ import kotlin.coroutines.Continuation;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
-// Resumes the Claude Code sessions a project had in its terminal tabs when it was last closed.
-public final class ClaudeTabsRestorer implements ProjectActivity {
+// Resumes the agent sessions a project had in its terminal tabs when it was last closed.
+public final class AgentTabsRestorer implements ProjectActivity {
     private static final String TERMINAL_TOOL_WINDOW_ID = "Terminal";
     // Rider restores its terminal tabs, without their processes, only once the Terminal tool window builds its content.
     private static final long TERMINAL_LOAD_DELAY_SECONDS = 3;
@@ -32,16 +33,19 @@ public final class ClaudeTabsRestorer implements ProjectActivity {
         ScheduledExecutorService scheduler = AppExecutorUtil.getAppScheduledExecutorService();
         scheduler.schedule(() -> runOnEdt(project, () -> {
             loadTerminalTabs(project);
-            scheduler.schedule(() -> runOnEdt(project, () -> {
-                resumeRecordedSessions(project);
-                startRecording(project);
-            }), RESTORE_DELAY_SECONDS, TimeUnit.SECONDS);
+            scheduler.schedule(() -> {
+                Optional<List<AgentHubCli.LiveAgentSession>> liveSessions = AgentHubCli.readLiveSessions();
+                runOnEdt(project, () -> {
+                    liveSessions.ifPresent(sessions -> resumeRecordedSessions(project, sessions));
+                    startRecording(project);
+                });
+            }, RESTORE_DELAY_SECONDS, TimeUnit.SECONDS);
         }), TERMINAL_LOAD_DELAY_SECONDS, TimeUnit.SECONDS);
         return Unit.INSTANCE;
     }
 
     private static void loadTerminalTabs(Project project) {
-        if (ClaudeTabsRecorder.loadRecordedTabs(project).isEmpty())
+        if (AgentTabsRecorder.loadRecordedTabs(project).isEmpty())
             return;
 
         ToolWindow terminal = ToolWindowManager.getInstance(project).getToolWindow(TERMINAL_TOOL_WINDOW_ID);
@@ -49,13 +53,13 @@ public final class ClaudeTabsRestorer implements ProjectActivity {
             terminal.getContentManager();
     }
 
-    private static void resumeRecordedSessions(Project project) {
-        List<ClaudeTabsRecorder.RecordedClaudeTab> recordedTabs = ClaudeTabsRecorder.loadRecordedTabs(project);
-        for (ClaudeTabsRecorder.RecordedClaudeTab recorded : recordedTabs) {
-            if (ClaudeSessionFiles.isSessionRunning(recorded.sessionId()))
+    private static void resumeRecordedSessions(Project project, List<AgentHubCli.LiveAgentSession> liveSessions) {
+        for (AgentTabsRecorder.RecordedAgentTab recorded : AgentTabsRecorder.loadRecordedTabs(project)) {
+            boolean isAlreadyRunning = liveSessions.stream().anyMatch(session -> session.sessionId().equals(recorded.sessionId()));
+            if (isAlreadyRunning)
                 continue;
 
-            TerminalToolWindowTab tab = findIdleTab(project, recorded.tabName());
+            TerminalToolWindowTab tab = findIdleTab(project, recorded.tabName(), liveSessions);
             if (tab == null) {
                 tab = TerminalToolWindowTabsManager.getInstance(project)
                     .createTabBuilder()
@@ -64,26 +68,23 @@ public final class ClaudeTabsRestorer implements ProjectActivity {
                     .requestFocus(false)
                     .createTab();
             }
-            tab.getView().createSendTextBuilder().shouldExecute().send("claude --resume " + recorded.sessionId());
+            tab.getView().createSendTextBuilder().shouldExecute().send(AgentHubCli.buildResumeCommand(recorded.agent(), recorded.sessionId()));
         }
     }
 
-    private static TerminalToolWindowTab findIdleTab(Project project, String tabName) {
+    private static TerminalToolWindowTab findIdleTab(Project project, String tabName, List<AgentHubCli.LiveAgentSession> liveSessions) {
         for (TerminalToolWindowTab tab : TerminalToolWindowTabsManager.getInstance(project).getTabs()) {
-            if (tabName.equals(tab.getContent().getDisplayName()) == false)
-                continue;
-
-            Long shellPid = TerminalTabsUtils.findShellPid(tab);
-            boolean isRunningClaude = shellPid != null && ClaudeSessionFiles.findSessionInProcessTree(shellPid).isPresent();
-            if (isRunningClaude == false)
+            if (tabName.equals(tab.getContent().getDisplayName()) && AgentTabsRecorder.findSessionInTab(tab, liveSessions).isEmpty())
                 return tab;
         }
         return null;
     }
 
+    // The CLI runs off the UI thread; only reading the tabs needs it.
     private static void startRecording(Project project) {
-        ScheduledFuture<?> recording = AppExecutorUtil.getAppScheduledExecutorService().scheduleWithFixedDelay(
-            () -> runOnEdt(project, () -> ClaudeTabsRecorder.recordClaudeTabs(project)), RECORD_INTERVAL_SECONDS, RECORD_INTERVAL_SECONDS, TimeUnit.SECONDS);
+        ScheduledFuture<?> recording = AppExecutorUtil.getAppScheduledExecutorService().scheduleWithFixedDelay(() -> {
+            AgentHubCli.readLiveSessions().ifPresent(liveSessions -> runOnEdt(project, () -> AgentTabsRecorder.recordAgentTabs(project, liveSessions)));
+        }, RECORD_INTERVAL_SECONDS, RECORD_INTERVAL_SECONDS, TimeUnit.SECONDS);
         Disposer.register(project, () -> recording.cancel(false));
     }
 

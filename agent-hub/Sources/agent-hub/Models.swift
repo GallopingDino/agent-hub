@@ -18,9 +18,15 @@ enum AgentState: String, Codable {
     }
 }
 
+enum AgentKind: String, Codable {
+    case claude
+    case codex
+}
+
 struct AgentSession: Codable {
     let sessionId: String
     let pid: Int32
+    let agent: AgentKind
     let name: String?
     let workingDirectory: String
     let clonePath: String?

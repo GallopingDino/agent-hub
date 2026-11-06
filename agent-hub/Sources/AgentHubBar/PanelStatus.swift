@@ -11,6 +11,7 @@ struct PanelStatus: Decodable {
 struct PanelSession: Decodable, Identifiable {
     let sessionId: String
     let pid: Int32
+    let agent: String?
     let name: String?
     let cloneName: String?
     let workingDirectory: String
@@ -31,8 +32,8 @@ struct PanelSession: Decodable, Identifiable {
 
     var isNeedingUser: Bool { state == "waiting" || state == "review" }
 
-    // Renaming types /rename into the agent's terminal, which would answer a pending question instead.
-    var isRenameable: Bool { hasTerminalTab && state != "waiting" }
+    // Claude Code is renamed by typing /rename into its terminal, which would answer a pending question instead.
+    var isRenameable: Bool { agent == "codex" || (hasTerminalTab && state != "waiting") }
 
     var stateOrder: Int {
         switch state {
