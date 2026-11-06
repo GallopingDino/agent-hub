@@ -176,20 +176,13 @@ private struct PanelHeader: View {
     @ObservedObject var model: PanelModel
 
     var body: some View {
-        HStack(spacing: 10) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(LinearGradient(colors: [Color.accentColor.opacity(0.9), Color.accentColor.opacity(0.6)], startPoint: .top, endPoint: .bottom))
-                Image(nsImage: MenuBarIcon.make(hasAttention: false))
-                    .renderingMode(.template)
-                    .foregroundStyle(.white)
-            }
-            .frame(width: 32, height: 32)
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Agent Hub").font(.system(size: 14, weight: .semibold, design: .rounded))
-                summary.font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
-            }
+        HStack(spacing: 7) {
+            Image(nsImage: MenuBarIcon.make(hasAttention: false))
+                .renderingMode(.template)
+                .resizable()
+                .frame(width: 24, height: 19.2)
+                .foregroundStyle(.secondary)
+            Text("Agent Hub").font(.system(size: 17, weight: .semibold))
             Spacer()
             Button {
                 Task { await model.refresh() }
@@ -201,22 +194,14 @@ private struct PanelHeader: View {
                     Image(systemName: "arrow.clockwise")
                 }
             }
-            .buttonStyle(GlassIconButtonStyle(diameter: 28))
+            .buttonStyle(GlassIconButtonStyle(diameter: 26))
             .disabled(model.isRefreshing)
             .help("Refresh now")
             SettingsMenu(model: model)
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 22)
         .padding(.top, 12)
-        .padding(.bottom, 6)
-    }
-
-    private var summary: Text {
-        guard let status = model.status else { return Text("Starting…") }
-        let needing = status.sessions.filter(\.isNeedingUser).count
-        let working = status.sessions.filter { $0.state == "working" }.count
-        let counts = needing > 0 ? "\(needing) need you · \(working) working" : "Nothing waits for you · \(working) working"
-        return Text("\(counts) · ") + Text(status.generatedAt, style: .relative) + Text(" ago")
+        .padding(.bottom, 2)
     }
 }
 
@@ -232,7 +217,7 @@ private struct SettingsMenu: View {
         } label: {
             Image(systemName: "slider.horizontal.3")
         }
-        .buttonStyle(GlassIconButtonStyle(diameter: 28))
+        .buttonStyle(GlassIconButtonStyle(diameter: 26))
         .help("Grouping and settings")
     }
 }
