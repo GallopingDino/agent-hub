@@ -88,7 +88,10 @@ enum StatusBuilder {
     }
 
     private static func collectStillChangedFiles(_ reportedFiles: [String], baseDirectory: String) -> [String] {
-        let absolutePaths = reportedFiles.map { $0.hasPrefix("/") ? ProcessTable.normalize($0) : ProcessTable.normalize(baseDirectory + "/" + $0) }
+        var seenPaths: Set<String> = []
+        let absolutePaths = reportedFiles
+            .map { $0.hasPrefix("/") ? ProcessTable.normalize($0) : ProcessTable.normalize(baseDirectory + "/" + $0) }
+            .filter { seenPaths.insert($0).inserted }
 
         var filesByRepository: [String: [String]] = [:]
         for path in absolutePaths {

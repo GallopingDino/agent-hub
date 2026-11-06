@@ -14,6 +14,7 @@ struct AgentTabsReply: Decodable {
 enum AgentTabsClient {
     private static let baseUrl = "http://127.0.0.1:63342/api/agent-tabs/"
     private static let timeoutSeconds: TimeInterval = 3
+    private static let session = URLSession(configuration: .ephemeral)
 
     static func listTabs() -> [RiderTerminalTab]? {
         guard let data = request("list", []) else { return nil }
@@ -45,7 +46,7 @@ enum AgentTabsClient {
 
         var result: Data?
         let done = DispatchSemaphore(value: 0)
-        URLSession.shared.dataTask(with: urlRequest) { data, response, _ in
+        session.dataTask(with: urlRequest) { data, response, _ in
             if (response as? HTTPURLResponse)?.statusCode == 200 {
                 result = data
             }

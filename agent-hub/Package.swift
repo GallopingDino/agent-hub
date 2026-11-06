@@ -5,6 +5,7 @@ let package = Package(
     name: "agent-hub",
     platforms: [.macOS(.v13)],
     targets: [
-        .executableTarget(name: "agent-hub", path: "Sources/agent-hub")
+        .executableTarget(name: "agent-hub", path: "Sources/agent-hub"),
+        .executableTarget(name: "AgentHubBar", path: "Sources/AgentHubBar")
     ]
 )
