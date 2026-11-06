@@ -397,7 +397,7 @@ private struct SessionRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            StateBadge(state: session.state)
+            StateBadge(state: session.state, agent: session.agent)
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
@@ -431,12 +431,6 @@ private struct SessionRow: View {
         .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Color.primary.opacity(isHovered ? 0.07 : 0)))
         .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
         .onHover { isHovered = $0 }
-        .onTapGesture {
-            if session.hasTerminalTab && isRenaming == false {
-                model.showAgent(session)
-            }
-        }
-        .help(session.hasTerminalTab ? focusHelp : "No Rider terminal tab found for this session")
     }
 
     @ViewBuilder
@@ -513,8 +507,18 @@ private struct SessionRow: View {
 
 private struct StateBadge: View {
     let state: String
+    let agent: String?
 
     var body: some View {
+        stateCircle
+            .overlay(alignment: .bottomTrailing) {
+                if let agent {
+                    AgentMark(agent: agent).offset(x: 4, y: 4)
+                }
+            }
+    }
+
+    private var stateCircle: some View {
         Image(systemName: symbol)
             .font(.system(size: 11, weight: .bold))
             .foregroundStyle(.white)
@@ -545,6 +549,26 @@ private struct StateBadge: View {
         case "working": return .blue
         default: return .gray
         }
+    }
+}
+
+private struct AgentMark: View {
+    let agent: String
+
+    var body: some View {
+        glyph
+            .foregroundStyle(.primary)
+            .frame(width: 16, height: 16)
+            .background(Circle().fill(.regularMaterial))
+            .overlay(Circle().strokeBorder(Color.primary.opacity(0.18), lineWidth: 0.5))
+            .help(agent == "codex" ? "Codex" : "Claude Code")
+    }
+
+    private var glyph: some View {
+        Image(nsImage: AgentLogo.image(for: agent))
+            .resizable()
+            .renderingMode(.template)
+            .frame(width: 10, height: 10)
     }
 }
 
