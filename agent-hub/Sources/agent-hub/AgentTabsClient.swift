@@ -29,6 +29,10 @@ enum AgentTabsClient {
         send("open-files", [URLQueryItem(name: "project", value: project)] + paths.map { URLQueryItem(name: "path", value: $0) })
     }
 
+    static func sendText(_ text: String, toProcess pid: Int32) -> AgentTabsReply {
+        send("send-text", [URLQueryItem(name: "pid", value: String(pid)), URLQueryItem(name: "text", value: text)])
+    }
+
     private static func send(_ action: String, _ query: [URLQueryItem]) -> AgentTabsReply {
         guard let data = request(action, query) else {
             return AgentTabsReply(ok: false, error: "Agent Tabs plugin is not reachable; is Rider running with the plugin installed?")

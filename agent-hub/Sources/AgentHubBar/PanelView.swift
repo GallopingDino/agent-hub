@@ -1,19 +1,25 @@
 import SwiftUI
 
 struct PanelView: View {
-    private static let maxListHeight: CGFloat = 560
+    private static let maxListHeight: CGFloat = 600
+    private static let groupSpacing: CGFloat = 10
 
     @ObservedObject var model: PanelModel
-    @State private var isStaleExpanded = false
     @State private var listHeight: CGFloat = 120
+    @State private var isForgottenExpanded = false
+    @State private var cardFrames: [String: CGRect] = [:]
+    @State private var drag: GroupDrag?
 
     var body: some View {
         VStack(spacing: 0) {
             PanelHeader(model: model)
-            Divider()
+            if let notice = model.notice {
+                NoticeBanner(text: notice)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
             ScrollView {
                 content
-                    .padding(.vertical, 8)
+                    .padding(10)
                     .background(GeometryReader { geometry in
                         Color.clear.preference(key: ListHeightKey.self, value: geometry.size.height)
                     })
@@ -21,11 +27,11 @@ struct PanelView: View {
             .frame(height: min(listHeight, Self.maxListHeight))
             .onPreferenceChange(ListHeightKey.self) { listHeight = $0 }
             if freeClones.isEmpty == false {
-                Divider()
                 PanelFooter(freeClones: freeClones)
             }
         }
-        .frame(width: 460)
+        .frame(width: 480)
+        .animation(.easeOut(duration: 0.2), value: model.notice)
         .onAppear { model.panelDidOpen() }
         .onDisappear { model.panelDidClose() }
     }
@@ -37,12 +43,22 @@ struct PanelView: View {
     @ViewBuilder
     private var content: some View {
         if let status = model.status {
-            VStack(alignment: .leading, spacing: 10) {
+            let groups = model.groups
+            VStack(alignment: .leading, spacing: Self.groupSpacing) {
                 if status.isAgentTabsAvailable == false {
-                    PluginWarning()
+                    NoticeBanner(text: "Agent Tabs plugin is not reachable in Rider: focusing and opening files won't work.", isWarning: true)
                 }
-                ForEach(model.groups) { group in
-                    groupSection(group)
+                ForEach(groups) { group in
+                    card(for: group, in: groups)
+                }
+                if groups.isEmpty {
+                    Text("No running agents").font(.system(size: 12)).foregroundStyle(.secondary).frame(maxWidth: .infinity).padding(20)
+                }
+            }
+            .coordinateSpace(name: GroupDrag.coordinateSpace)
+            .onPreferenceChange(CardFramesKey.self) { frames in
+                if drag == nil {
+                    cardFrames = frames
                 }
             }
         }
@@ -52,88 +68,91 @@ struct PanelView: View {
                 Text(model.isRefreshing ? "Reading agents…" : "agent-hub did not answer").foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity)
-            .padding(24)
+            .padding(28)
         }
     }
 
-    private func groupSection(_ group: SessionGroup) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            if group.isForgotten {
-                Button {
-                    withAnimation(.easeOut(duration: 0.15)) { isStaleExpanded.toggle() }
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 9, weight: .bold))
-                            .rotationEffect(.degrees(isStaleExpanded ? 90 : 0))
-                        SectionTitle(title: group.title, count: group.sessions.count)
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .padding(.leading, 10)
-            }
-            else if group.isReorderable {
-                GroupHeader(group: group, mode: model.groupingMode, model: model)
-            }
-            else {
-                SectionTitle(title: group.title, count: group.sessions.count)
-            }
+    private func card(for group: SessionGroup, in groups: [SessionGroup]) -> some View {
+        let isDragged = drag?.groupId == group.id
+        let isMergeTarget = drag.map { mergeTarget(of: $0, in: groups) == group.id } ?? false
+        let offset = displacement(of: group, in: groups)
 
-            if group.isForgotten == false || isStaleExpanded {
-                ForEach(group.sessions) { SessionRow(session: $0, isShowingProject: model.groupingMode != .project, model: model) }
+        return GroupCard(
+            group: group,
+            model: model,
+            isForgottenExpanded: $isForgottenExpanded,
+            isDragged: isDragged,
+            isMergeTarget: isMergeTarget,
+            onDragChanged: { value in drag = GroupDrag(groupId: group.id, translation: value.translation.height, pointerY: value.location.y) },
+            onDragEnded: { finishDrag(in: groups) }
+        )
+        .background(GeometryReader { geometry in
+            Color.clear.preference(key: CardFramesKey.self, value: [group.id: geometry.frame(in: .named(GroupDrag.coordinateSpace))])
+        })
+        .offset(y: offset)
+        .zIndex(isDragged ? 1 : 0)
+        .animation(isDragged ? nil : .spring(response: 0.28, dampingFraction: 0.85), value: offset)
+    }
+
+    private func displacement(of group: SessionGroup, in groups: [SessionGroup]) -> CGFloat {
+        guard let drag else { return 0 }
+        if drag.groupId == group.id {
+            return drag.translation
+        }
+        guard mergeTarget(of: drag, in: groups) == nil,
+              let draggedFrame = cardFrames[drag.groupId],
+              let target = targetIndex(of: drag, in: groups) else { return 0 }
+
+        let order = groups.filter(\.isReorderable).map(\.id)
+        guard let draggedIndex = order.firstIndex(of: drag.groupId), let index = order.firstIndex(of: group.id) else { return 0 }
+
+        let shift = draggedFrame.height + Self.groupSpacing
+        if draggedIndex < index && index <= target { return -shift }
+        if target <= index && index < draggedIndex { return shift }
+        return 0
+    }
+
+    private func targetIndex(of drag: GroupDrag, in groups: [SessionGroup]) -> Int? {
+        guard let draggedFrame = cardFrames[drag.groupId] else { return nil }
+        let draggedCenter = draggedFrame.midY + drag.translation
+        return groups
+            .filter { $0.isReorderable && $0.id != drag.groupId }
+            .filter { (cardFrames[$0.id]?.midY ?? .infinity) < draggedCenter }
+            .count
+    }
+
+    // In task mode, dropping onto another block's header merges the two tasks.
+    private func mergeTarget(of drag: GroupDrag, in groups: [SessionGroup]) -> String? {
+        guard model.groupingMode == .task else { return nil }
+        return groups.first { group in
+            guard group.isReorderable, group.id != drag.groupId, let frame = cardFrames[group.id] else { return false }
+            return drag.pointerY >= frame.minY && drag.pointerY <= frame.minY + GroupCard.headerHeight
+        }?.id
+    }
+
+    private func finishDrag(in groups: [SessionGroup]) {
+        guard let finished = drag else { return }
+        let merge = mergeTarget(of: finished, in: groups).flatMap { id in groups.first { $0.id == id } }
+        let target = targetIndex(of: finished, in: groups)
+
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+            if let merge {
+                model.mergeTask(finished.groupId, into: merge)
             }
+            else if let target {
+                model.moveGroup(finished.groupId, to: target)
+            }
+            drag = nil
         }
     }
 }
 
-private struct GroupHeader: View {
-    let group: SessionGroup
-    let mode: GroupingMode
-    @ObservedObject var model: PanelModel
-    @State private var isDropTarget = false
+private struct GroupDrag {
+    static let coordinateSpace = "groups"
 
-    var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "line.3.horizontal")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(.tertiary)
-            if mode == .project {
-                ProjectChip(name: group.title)
-            }
-            else {
-                Text(group.title)
-                    .font(.system(size: 11, weight: .semibold))
-                    .lineLimit(1)
-                ForEach(projectNames, id: \.self) { ProjectChip(name: $0) }
-            }
-            Text("\(group.sessions.count)")
-                .font(.system(size: 10, weight: .semibold).monospacedDigit())
-                .foregroundStyle(.secondary)
-            Spacer()
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 3)
-        .background(RoundedRectangle(cornerRadius: 6).fill(isDropTarget ? Color.accentColor.opacity(0.18) : Color.clear).padding(.horizontal, 6))
-        .contentShape(Rectangle())
-        .draggable(group.id)
-        .dropDestination(for: String.self) { items, _ in
-            guard let movedId = items.first else { return false }
-            withAnimation(.easeOut(duration: 0.15)) { model.moveGroup(movedId, before: group.id) }
-            return true
-        } isTargeted: { isDropTarget = $0 }
-        .contextMenu {
-            Button("Move to top") { model.moveGroup(group.id, by: -1000) }
-            Button("Move up") { model.moveGroup(group.id, by: -1) }
-            Button("Move down") { model.moveGroup(group.id, by: 1) }
-        }
-        .help("Drag to reorder groups")
-    }
-
-    private var projectNames: [String] {
-        var seen: Set<String> = []
-        return group.sessions.map(\.projectName).filter { seen.insert($0).inserted }
-    }
+    let groupId: String
+    let translation: CGFloat
+    let pointerY: CGFloat
 }
 
 private struct ListHeightKey: PreferenceKey {
@@ -144,16 +163,33 @@ private struct ListHeightKey: PreferenceKey {
     }
 }
 
+private struct CardFramesKey: PreferenceKey {
+    static var defaultValue: [String: CGRect] = [:]
+
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
+        value.merge(nextValue()) { _, new in new }
+    }
+}
+
+// MARK: - Header
+
 private struct PanelHeader: View {
     @ObservedObject var model: PanelModel
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(nsImage: MenuBarIcon.make(hasAttention: false))
-                .foregroundStyle(.secondary)
+            ZStack {
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(LinearGradient(colors: [Color.accentColor.opacity(0.9), Color.accentColor.opacity(0.6)], startPoint: .top, endPoint: .bottom))
+                Image(nsImage: MenuBarIcon.make(hasAttention: false))
+                    .renderingMode(.template)
+                    .foregroundStyle(.white)
+            }
+            .frame(width: 32, height: 32)
+
             VStack(alignment: .leading, spacing: 1) {
-                Text("Agent Hub").font(.system(size: 13, weight: .semibold))
-                summary.font(.system(size: 11)).foregroundStyle(.secondary)
+                Text("Agent Hub").font(.system(size: 14, weight: .semibold, design: .rounded))
+                summary.font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer()
             Button {
@@ -163,13 +199,14 @@ private struct PanelHeader: View {
                     .rotationEffect(.degrees(model.isRefreshing ? 360 : 0))
                     .animation(model.isRefreshing ? .linear(duration: 0.8).repeatForever(autoreverses: false) : .default, value: model.isRefreshing)
             }
-            .buttonStyle(IconButtonStyle())
+            .buttonStyle(GlassIconButtonStyle(diameter: 28))
             .disabled(model.isRefreshing)
             .help("Refresh now")
             SettingsMenu(model: model)
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.top, 12)
+        .padding(.bottom, 6)
     }
 
     private var summary: Text {
@@ -177,7 +214,7 @@ private struct PanelHeader: View {
         let needing = status.sessions.filter(\.isNeedingUser).count
         let working = status.sessions.filter { $0.state == "working" }.count
         let counts = needing > 0 ? "\(needing) need you · \(working) working" : "Nothing waits for you · \(working) working"
-        return Text("\(counts) · updated ") + Text(status.generatedAt, style: .relative) + Text(" ago")
+        return Text("\(counts) · ") + Text(status.generatedAt, style: .relative) + Text(" ago")
     }
 }
 
@@ -197,37 +234,179 @@ private struct SettingsMenu: View {
             Divider()
             Button("Quit Agent Hub") { NSApplication.shared.terminate(nil) }
         } label: {
-            Image(systemName: "gearshape")
+            Image(systemName: "slider.horizontal.3")
+                .font(.system(size: 12, weight: .medium))
+                .frame(width: 28, height: 28)
+                .background(GlassCircle())
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .fixedSize()
-        .frame(width: 24, height: 24)
         .help("Grouping and settings")
     }
 }
 
-private struct SectionTitle: View {
-    let title: String
-    let count: Int
+private struct NoticeBanner: View {
+    let text: String
+    var isWarning = false
 
     var body: some View {
-        HStack(spacing: 6) {
-            Text(title.uppercased())
-                .font(.system(size: 10, weight: .semibold))
-                .tracking(0.6)
-                .foregroundStyle(.secondary)
-            Text("\(count)")
-                .font(.system(size: 10, weight: .semibold).monospacedDigit())
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 5)
-                .padding(.vertical, 1)
-                .background(Capsule().fill(Color.primary.opacity(0.08)))
-        }
-        .padding(.horizontal, 14)
-        .padding(.bottom, 2)
+        Label(text, systemImage: isWarning ? "exclamationmark.triangle.fill" : "info.circle.fill")
+            .font(.system(size: 11))
+            .foregroundStyle(isWarning ? Color.orange : Color.secondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(GlassShape(cornerRadius: 12, tint: isWarning ? .orange : nil))
+            .padding(.horizontal, isWarning ? 0 : 10)
+            .padding(.top, isWarning ? 0 : 4)
     }
 }
+
+// MARK: - Group card
+
+private struct GroupCard: View {
+    static let headerHeight: CGFloat = 34
+
+    let group: SessionGroup
+    @ObservedObject var model: PanelModel
+    @Binding var isForgottenExpanded: Bool
+    let isDragged: Bool
+    let isMergeTarget: Bool
+    let onDragChanged: (DragGesture.Value) -> Void
+    let onDragEnded: () -> Void
+
+    @State private var isRenaming = false
+    @State private var draftName = ""
+    @FocusState private var isNameFieldFocused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            header
+            if isCollapsed == false {
+                VStack(spacing: 1) {
+                    ForEach(group.sessions) { SessionRow(session: $0, isShowingProject: model.groupingMode != .project, model: model) }
+                }
+                .padding(.horizontal, 4)
+                .padding(.bottom, 4)
+            }
+        }
+        .background(GlassShape(cornerRadius: 16, tint: isMergeTarget ? .accentColor : nil, isRaised: isDragged))
+        .overlay(alignment: .topTrailing) {
+            if isMergeTarget {
+                Label("Merge into \(group.title)", systemImage: "arrow.triangle.merge")
+                    .font(.system(size: 10, weight: .semibold))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(Color.accentColor))
+                    .foregroundStyle(.white)
+                    .padding(8)
+            }
+        }
+        .scaleEffect(isDragged ? 1.02 : 1)
+        .opacity(group.isForgotten ? 0.85 : 1)
+    }
+
+    private var isCollapsed: Bool { group.isForgotten && isForgottenExpanded == false }
+
+    @ViewBuilder
+    private var header: some View {
+        let row = HStack(spacing: 7) {
+            if group.isForgotten {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(isForgottenExpanded ? 90 : 0))
+            }
+            else if group.isReorderable {
+                Image(systemName: "line.3.horizontal")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            title
+            CountPill(count: group.sessions.count)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .frame(height: Self.headerHeight)
+        .contentShape(Rectangle())
+
+        if group.isForgotten {
+            row.onTapGesture { withAnimation(.easeOut(duration: 0.18)) { isForgottenExpanded.toggle() } }
+        }
+        else if group.isReorderable {
+            row
+                .gesture(DragGesture(minimumDistance: 3, coordinateSpace: .named(GroupDrag.coordinateSpace))
+                    .onChanged(onDragChanged)
+                    .onEnded { _ in onDragEnded() })
+                .contextMenu { contextMenu }
+                .help(model.groupingMode == .task ? "Drag to reorder, drop on another task to merge, double-click to rename" : "Drag to reorder")
+        }
+        else {
+            row
+        }
+    }
+
+    @ViewBuilder
+    private var title: some View {
+        if model.groupingMode == .project && group.isReorderable {
+            ProjectChip(name: group.title, size: 11)
+        }
+        else if model.groupingMode == .task && group.isReorderable {
+            if isRenaming {
+                TextField("Task name", text: $draftName)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12, weight: .semibold))
+                    .focused($isNameFieldFocused)
+                    .onSubmit(commitRename)
+                    .onExitCommand { isRenaming = false }
+                    .frame(maxWidth: 220)
+            }
+            else {
+                Text(group.title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .lineLimit(1)
+                    .onTapGesture(count: 2, perform: startRename)
+                ForEach(projectNames, id: \.self) { ProjectChip(name: $0) }
+            }
+        }
+        else {
+            Text(group.title.uppercased())
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(0.7)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var contextMenu: some View {
+        if model.groupingMode == .task {
+            Button("Rename…", action: startRename)
+            Divider()
+        }
+        Button("Move to top") { model.moveGroup(group.id, by: -1000) }
+        Button("Move up") { model.moveGroup(group.id, by: -1) }
+        Button("Move down") { model.moveGroup(group.id, by: 1) }
+    }
+
+    private var projectNames: [String] {
+        var seen: Set<String> = []
+        return group.sessions.map(\.projectName).filter { seen.insert($0).inserted }
+    }
+
+    private func startRename() {
+        draftName = group.title
+        isRenaming = true
+        DispatchQueue.main.async { isNameFieldFocused = true }
+    }
+
+    private func commitRename() {
+        isRenaming = false
+        model.renameTask(group, to: draftName)
+    }
+}
+
+// MARK: - Session row
 
 private struct SessionRow: View {
     let session: PanelSession
@@ -249,7 +428,7 @@ private struct SessionRow: View {
                     }
                     Spacer(minLength: 4)
                     Text(IdleFormatter.format(session.idleSeconds))
-                        .font(.system(size: 11).monospacedDigit())
+                        .font(.system(size: 11, design: .rounded).monospacedDigit())
                         .foregroundStyle(.tertiary)
                 }
                 if let detail = detailText {
@@ -268,11 +447,10 @@ private struct SessionRow: View {
 
             actions
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 8)
         .padding(.vertical, 7)
-        .background(RoundedRectangle(cornerRadius: 8).fill(isHovered ? Color.primary.opacity(0.07) : Color.clear))
-        .contentShape(Rectangle())
-        .padding(.horizontal, 4)
+        .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Color.primary.opacity(isHovered ? 0.07 : 0)))
+        .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
         .onHover { isHovered = $0 }
         .onTapGesture {
             if session.hasTerminalTab {
@@ -283,21 +461,21 @@ private struct SessionRow: View {
     }
 
     private var actions: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 4) {
             if let unityPid = session.unityPid {
                 Button { model.showUnityEditor(pid: unityPid) } label: { Image(systemName: "cube") }
                     .help("Show the \(session.projectName) Unity editor")
             }
             if session.artifactUrl != nil {
-                Button { model.openArtifact(session) } label: { Image(systemName: "doc.richtext") }
-                    .help("Open the agent's artifact in the browser")
+                Button { model.openArtifact(session) } label: { Image(systemName: "globe") }
+                    .help("Open the page this agent published")
             }
-            Button { model.showAgent(session) } label: { Image(systemName: "arrow.up.forward.app") }
+            Button { model.showAgent(session) } label: { Image(systemName: "terminal") }
                 .disabled(session.hasTerminalTab == false)
                 .help(focusHelp)
         }
-        .buttonStyle(IconButtonStyle())
-        .opacity(isHovered || session.isNeedingUser ? 1 : 0.45)
+        .buttonStyle(GlassIconButtonStyle(diameter: 26))
+        .opacity(isHovered || session.isNeedingUser ? 1 : 0.5)
     }
 
     private var detailText: String? {
@@ -323,19 +501,25 @@ private struct StateBadge: View {
 
     var body: some View {
         Image(systemName: symbol)
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(color)
-            .frame(width: 24, height: 24)
-            .background(Circle().fill(color.opacity(0.15)))
+            .font(.system(size: 11, weight: .bold))
+            .foregroundStyle(.white)
+            .frame(width: 26, height: 26)
+            .background(
+                Circle()
+                    .fill(LinearGradient(colors: [color.opacity(0.95), color.opacity(0.7)], startPoint: .top, endPoint: .bottom))
+                    .overlay(Circle().strokeBorder(.white.opacity(0.25), lineWidth: 0.5))
+                    .shadow(color: color.opacity(0.35), radius: 3, y: 1)
+            )
+            .saturation(state == "idle" || state == "stale" ? 0.35 : 1)
     }
 
     private var symbol: String {
         switch state {
-        case "waiting": return "hand.raised.fill"
+        case "waiting": return "questionmark"
         case "review": return "checkmark"
-        case "working": return "bolt.fill"
-        case "stale": return "clock"
-        default: return "moon.fill"
+        case "working": return "ellipsis"
+        case "stale": return "zzz"
+        default: return "pause.fill"
         }
     }
 
@@ -344,37 +528,94 @@ private struct StateBadge: View {
         case "waiting": return .orange
         case "review": return .green
         case "working": return .blue
-        case "stale": return .red
         default: return .gray
         }
     }
 }
 
+// MARK: - Building blocks
+
+private struct CountPill: View {
+    let count: Int
+
+    var body: some View {
+        Text("\(count)")
+            .font(.system(size: 10, weight: .semibold, design: .rounded).monospacedDigit())
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 1)
+            .background(Capsule().fill(Color.primary.opacity(0.08)))
+    }
+}
+
 private struct ProjectChip: View {
     let name: String
+    var size: CGFloat = 10
 
     var body: some View {
         Text(name)
-            .font(.system(size: 10, weight: .medium))
+            .font(.system(size: size, weight: .semibold))
             .lineLimit(1)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 1)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 2)
             .foregroundStyle(ProjectPalette.color(for: name))
-            .background(Capsule().fill(ProjectPalette.color(for: name).opacity(0.14)))
+            .background(Capsule().fill(ProjectPalette.color(for: name).opacity(0.16)))
+            .overlay(Capsule().strokeBorder(ProjectPalette.color(for: name).opacity(0.25), lineWidth: 0.5))
     }
 }
 
-private struct PluginWarning: View {
+private struct GlassShape: View {
+    let cornerRadius: CGFloat
+    var tint: Color?
+    var isRaised = false
+
     var body: some View {
-        Label("Agent Tabs plugin is not reachable in Rider: focusing and opening files won't work.", systemImage: "exclamationmark.triangle.fill")
-            .font(.system(size: 11))
-            .foregroundStyle(.orange)
-            .padding(10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 8).fill(Color.orange.opacity(0.1)))
-            .padding(.horizontal, 10)
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        shape
+            .fill(.thinMaterial)
+            .overlay(shape.fill((tint ?? .clear).opacity(0.12)))
+            .overlay(shape.strokeBorder(LinearGradient(colors: [.white.opacity(0.28), .white.opacity(0.05)], startPoint: .top, endPoint: .bottom), lineWidth: 0.7))
+            .overlay(tint.map { shape.strokeBorder($0.opacity(0.7), lineWidth: 1.5) })
+            .shadow(color: .black.opacity(isRaised ? 0.32 : 0.1), radius: isRaised ? 18 : 5, y: isRaised ? 10 : 2)
     }
 }
+
+private struct GlassCircle: View {
+    var body: some View {
+        Circle()
+            .fill(.thinMaterial)
+            .overlay(Circle().strokeBorder(LinearGradient(colors: [.white.opacity(0.3), .white.opacity(0.06)], startPoint: .top, endPoint: .bottom), lineWidth: 0.6))
+            .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
+    }
+}
+
+private struct GlassIconButtonStyle: ButtonStyle {
+    let diameter: CGFloat
+
+    func makeBody(configuration: Configuration) -> some View {
+        GlassIconButtonBody(configuration: configuration, diameter: diameter)
+    }
+
+    private struct GlassIconButtonBody: View {
+        let configuration: ButtonStyleConfiguration
+        let diameter: CGFloat
+        @Environment(\.isEnabled) private var isEnabled
+        @State private var isHovered = false
+
+        var body: some View {
+            configuration.label
+                .font(.system(size: diameter * 0.44, weight: .medium))
+                .frame(width: diameter, height: diameter)
+                .foregroundStyle(isEnabled ? (isHovered ? Color.accentColor : Color.primary) : Color.secondary.opacity(0.5))
+                .background(GlassCircle().opacity(isHovered || configuration.isPressed ? 1 : 0.7))
+                .scaleEffect(configuration.isPressed ? 0.92 : 1)
+                .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+                .onHover { isHovered = $0 }
+        }
+    }
+}
+
+// MARK: - Footer
 
 private struct PanelFooter: View {
     let freeClones: [PanelClone]
@@ -383,7 +624,7 @@ private struct PanelFooter: View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text("FREE")
                 .font(.system(size: 10, weight: .semibold))
-                .tracking(0.6)
+                .tracking(0.7)
                 .foregroundStyle(.secondary)
                 .fixedSize()
             FlowLayout(spacing: 4) {
@@ -391,30 +632,10 @@ private struct PanelFooter: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 16)
+        .padding(.top, 2)
+        .padding(.bottom, 12)
         .help("Clones open in Rider or Unity with no agent and no local changes")
-    }
-}
-
-private struct IconButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        IconButtonBody(configuration: configuration)
-    }
-
-    private struct IconButtonBody: View {
-        let configuration: ButtonStyleConfiguration
-        @Environment(\.isEnabled) private var isEnabled
-        @State private var isHovered = false
-
-        var body: some View {
-            configuration.label
-                .font(.system(size: 12, weight: .medium))
-                .frame(width: 24, height: 24)
-                .foregroundStyle(isEnabled ? Color.primary : Color.secondary.opacity(0.5))
-                .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(configuration.isPressed ? 0.16 : isHovered ? 0.09 : 0)))
-                .onHover { isHovered = $0 }
-        }
     }
 }
 
@@ -472,7 +693,7 @@ enum ProjectPalette {
     // Parallel clones share their main project's colour.
     static func color(for cloneName: String) -> Color {
         let project = cloneName.replacingOccurrences(of: "-parallel", with: "")
-        return Color(hue: hueByProject[project] ?? hashedHue(project), saturation: 0.6, brightness: 0.8)
+        return Color(hue: hueByProject[project] ?? hashedHue(project), saturation: 0.6, brightness: 0.85)
     }
 
     private static func hashedHue(_ project: String) -> Double {

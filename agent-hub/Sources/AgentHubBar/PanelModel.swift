@@ -18,6 +18,7 @@ final class PanelModel: ObservableObject {
         didSet { defaults.set(groupOrderByMode, forKey: "groupOrderByMode") }
     }
     @Published private(set) var status: PanelStatus?
+    @Published private(set) var notice: String?
     @Published private(set) var isRefreshing = false
 
     private var isPanelOpen = false
@@ -77,11 +78,11 @@ final class PanelModel: ObservableObject {
         }
     }
 
-    func moveGroup(_ movedId: String, before targetId: String) {
+    func moveGroup(_ movedId: String, to index: Int) {
         var order = groups.filter(\.isReorderable).map(\.id)
-        guard movedId != targetId, let from = order.firstIndex(of: movedId) else { return }
+        guard let from = order.firstIndex(of: movedId) else { return }
         order.remove(at: from)
-        order.insert(movedId, at: order.firstIndex(of: targetId) ?? order.endIndex)
+        order.insert(movedId, at: min(max(index, 0), order.count))
         saveGroupOrder(order)
     }
 
@@ -94,8 +95,67 @@ final class PanelModel: ObservableObject {
         saveGroupOrder(order)
     }
 
+    func renameTask(_ group: SessionGroup, to newName: String) {
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false, trimmed != group.title else { return }
+        applyTaskName(trimmed, to: group.sessions, replacingGroupId: group.id)
+    }
+
+    func mergeTask(_ sourceId: String, into target: SessionGroup) {
+        guard let source = groups.first(where: { $0.id == sourceId }), source.id != target.id else { return }
+        applyTaskName(target.title, to: source.sessions, replacingGroupId: source.id)
+    }
+
     func resetGroupOrder() {
         groupOrderByMode = [:]
+    }
+
+    private func applyTaskName(_ name: String, to sessions: [PanelSession], replacingGroupId: String) {
+        let renameable = sessions.filter(\.isRenameable)
+        let skipped = sessions.count - renameable.count
+        replaceSavedGroupId(replacingGroupId, with: name.lowercased())
+
+        Task {
+            var failed = 0
+            for session in renameable {
+                if await HubClient.rename(session, to: name) == false {
+                    failed += 1
+                }
+            }
+            showNotice(makeRenameNotice(renamed: renameable.count - failed, skipped: skipped, failed: failed))
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            await refresh()
+        }
+    }
+
+    private func makeRenameNotice(renamed: Int, skipped: Int, failed: Int) -> String? {
+        var parts: [String] = []
+        if skipped > 0 { parts.append("\(skipped) busy agent\(skipped == 1 ? "" : "s") left as is, rename when idle") }
+        if failed > 0 { parts.append("\(failed) rename\(failed == 1 ? "" : "s") failed") }
+        return parts.isEmpty ? nil : "Renamed \(renamed). " + parts.joined(separator: "; ")
+    }
+
+    private func showNotice(_ text: String?) {
+        guard let text else { return }
+        notice = text
+        Task {
+            try? await Task.sleep(nanoseconds: 6_000_000_000)
+            if notice == text {
+                notice = nil
+            }
+        }
+    }
+
+    private func replaceSavedGroupId(_ oldId: String, with newId: String) {
+        var order = readGroupOrder()
+        guard let index = order.firstIndex(of: oldId) else { return }
+        if order.contains(newId) {
+            order.remove(at: index)
+        }
+        else {
+            order[index] = newId
+        }
+        groupOrderByMode[groupingMode.rawValue] = order
     }
 
     private func readGroupOrder() -> [String] {

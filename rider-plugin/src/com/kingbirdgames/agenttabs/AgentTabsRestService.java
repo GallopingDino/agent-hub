@@ -51,7 +51,8 @@ public final class AgentTabsRestService extends RestService {
                 case "focus" -> focus(urlDecoder);
                 case "open" -> open(urlDecoder);
                 case "open-files" -> openFiles(urlDecoder);
-                default -> error("unknown action '" + action + "', expected list, focus, open or open-files");
+                case "send-text" -> sendText(urlDecoder);
+                default -> error("unknown action '" + action + "', expected list, focus, open, open-files or send-text");
             };
         }
         catch (RuntimeException e) {
@@ -103,6 +104,20 @@ public final class AgentTabsRestService extends RestService {
 
         int openedCount = TerminalTabsUtils.openFiles(project, paths);
         return "{\"ok\":true,\"opened\":" + openedCount + "}";
+    }
+
+    private static String sendText(QueryStringDecoder urlDecoder) {
+        String pid = findParameter(urlDecoder, "pid");
+        String text = findParameter(urlDecoder, "text");
+        if (pid == null || text == null || text.isBlank())
+            return error("parameters 'pid' and 'text' are required");
+
+        TerminalTabsUtils.TabLocation location = TerminalTabsUtils.findTabOwningProcess(Long.parseLong(pid));
+        if (location == null)
+            return error("no terminal tab found for pid=" + pid);
+
+        location.tab().getView().createSendTextBuilder().shouldExecute().send(text);
+        return describe(location);
     }
 
     private static String describe(TerminalTabsUtils.TabLocation location) {

@@ -10,6 +10,7 @@ usage:
   agent-hub review <session>      open-files, then focus
   agent-hub open-artifact <session>  open the last artifact the agent published
   agent-hub focus-unity <session|clone>  bring the clone's Unity editor to the front
+  agent-hub rename <session> <new name>  rename an idle Claude session by typing /rename into its tab
 
 <session> is a session name, a session id prefix or a pid.
 """
@@ -78,6 +79,15 @@ case "focus", "open-files", "review", "open-artifact":
         guard let artifactUrl = session.artifactUrl else { exitWithError("session '\(session.name ?? session.sessionId)' has not published an artifact") }
         _ = ShellCommand.run("/usr/bin/open", [artifactUrl])
     }
+
+case "rename":
+    guard arguments.count >= 3 else { exitWithError(usage) }
+    let status = StatusBuilder.build(config: config)
+    guard let session = findSession(arguments[1], in: status) else { exitWithError("no single session matches '\(arguments[1])'") }
+    // Typed text would land in a busy agent's conversation or answer its pending question.
+    guard session.state != .working && session.state != .waiting else { exitWithError("session '\(session.name ?? session.sessionId)' is busy; rename it when it is idle") }
+    let newName = arguments.dropFirst(2).joined(separator: " ").replacingOccurrences(of: "\n", with: " ")
+    report(AgentTabsClient.sendText("/rename " + newName, toProcess: session.pid))
 
 case "focus-unity":
     guard arguments.count >= 2 else { exitWithError(usage) }

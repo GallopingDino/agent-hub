@@ -26,6 +26,10 @@ enum HubClient {
         _ = await run([isOpeningEditedFiles ? "review" : "focus", String(session.pid)])
     }
 
+    static func rename(_ session: PanelSession, to newName: String) async -> Bool {
+        await run(["rename", String(session.pid), newName]) != nil
+    }
+
     static func openArtifact(_ session: PanelSession) async {
         _ = await run(["open-artifact", String(session.pid)])
     }

@@ -31,6 +31,9 @@ struct PanelSession: Decodable, Identifiable {
 
     var isNeedingUser: Bool { state == "waiting" || state == "review" }
 
+    // Renaming types /rename into the agent's terminal, which is only safe when it is not busy or asking something.
+    var isRenameable: Bool { hasTerminalTab && state != "working" && state != "waiting" }
+
     var stateOrder: Int {
         switch state {
         case "waiting": return 0
