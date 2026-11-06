@@ -1,0 +1,17 @@
+<idea-plugin>
+  <id>com.kingbirdgames.agenttabs</id>
+  <name>Agent Tabs</name>
+  <vendor>KingBird Games</vendor>
+  <version>0.1.0</version>
+  <description>Local HTTP API to list, focus and open terminal tabs in Rider project windows.</description>
+  <idea-version since-build="262"/>
+
+  <dependencies>
+    <plugin id="org.jetbrains.plugins.terminal"/>
+    <module name="intellij.terminal.frontend"/>
+  </dependencies>
+
+  <extensions defaultExtensionNs="com.intellij">
+    <httpRequestHandler implementation="com.kingbirdgames.agenttabs.AgentTabsRestService"/>
+  </extensions>
+</idea-plugin>

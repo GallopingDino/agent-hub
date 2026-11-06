@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orchestra — пульт проектов</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=Unbounded:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* layout: what you see → morning plan → TUI vs web → names → steps */
+  --bg:#f3f4f1; --panel:#ffffff; --ink:#1b1f1d; --muted:#5f6b66; --line:#d9ddd8; --accent:#0f7b6c;
+  --ok:#2e8b57; --bad:#b8473b;
+  --term:#14191a; --term-ink:#d7e2dd;
+  --display:"Unbounded","Helvetica Neue",sans-serif; --body:"IBM Plex Sans",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121514;--panel:#1a1f1d;--ink:#e6ebe8;--muted:#9aa6a1;--line:#2c3431;--accent:#3fbfa8;--ok:#5cc78a;--bad:#e07468;--term:#0b0e0f;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#121514;--panel:#1a1f1d;--ink:#e6ebe8;--muted:#9aa6a1;--line:#2c3431;--accent:#3fbfa8;--ok:#5cc78a;--bad:#e07468;--term:#0b0e0f;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 var(--body)}
+main{max-width:1080px;margin:0 auto;padding:32px 20px 64px;display:grid;gap:40px}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0}
+h1{font-size:28px;letter-spacing:-.01em}
+h2{font-size:19px;margin-bottom:12px}
+h3{font-size:14px;margin-bottom:8px}
+p{margin:0;max-width:72ch}
+.lead{color:var(--muted);margin-top:8px}
+.note{color:var(--muted);font-size:13px;margin-top:8px}
+code{font-family:var(--mono);font-size:13px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px}
+.verdict{padding:16px 18px;border-left:5px solid var(--accent)}
+.term{background:var(--term);color:var(--term-ink);border-radius:10px;padding:14px 16px;font:12.5px/1.65 var(--mono);overflow-x:auto;white-space:pre;margin:0}
+.term .p{color:#7f8c87}.term .h{color:#3fbfa8;font-weight:600}.term .r{color:#5cc78a;font-weight:600}.term .a{color:#e3a54a;font-weight:600}.term .w{color:#6aa5e8;font-weight:600}.term .s{color:#e07468}.term .d{color:#7f8c87}.term .sel{background:#24302d}
+.flow{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.flow .step{padding:12px 14px;font-size:14px;position:relative}
+.flow .step b{display:block;font-family:var(--display);font-size:12px;color:var(--accent);margin-bottom:4px}
+.flow .who{font-size:12px;color:var(--muted);margin-top:6px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.col{display:grid;gap:10px;align-content:start}
+.box{padding:14px 16px}
+.box ul{margin:0;padding-left:18px;display:grid;gap:4px;font-size:14px}
+.yes h4,.no h4{margin:0 0 6px;font-size:14px}
+.yes h4{color:var(--ok)}.no h4{color:var(--bad)}
+.rec{display:inline-block;font:600 11px var(--body);text-transform:uppercase;letter-spacing:.06em;background:var(--accent);color:var(--bg);padding:2px 8px;border-radius:4px;margin-left:8px;vertical-align:2px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+td,th{padding:9px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-weight:500;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+td.n{font-family:var(--mono);font-weight:600;white-space:nowrap}
+.scroll{overflow-x:auto}
+ol.steps{margin:0;padding:0;list-style:none;display:grid;gap:8px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:34px 1fr auto;gap:12px;align-items:baseline;padding:10px 14px}
+ol.steps li::before{content:counter(s);font-family:var(--display);color:var(--accent);font-size:18px}
+ol.steps .t{color:var(--muted);font-size:13px;white-space:nowrap}
+.q{margin:0;padding-left:20px;display:grid;gap:6px}
+@media (max-width:820px){.grid2,.flow{grid-template-columns:1fr}ol.steps li{grid-template-columns:28px 1fr}ol.steps .t{grid-column:2}}
+</style>
+</head>
+<body>
+<main>
+
+<header>
+  <h1>Пульт KingBird: план дня и статус клонов</h1>
+  <p class="lead">Четвёртый раунд с Fable и Codex, после ваших поправок. Рабочее имя в макетах — <code>tutti</code>, окончательное выбираете вы (ниже).</p>
+</header>
+
+<div class="panel verdict"><b>Граница инструмента:</b> показывает состояние и помогает распределить работу. Не редактор и не чат с агентами: разговор с агентами и чтение кода остаются в Rider. Агентов он не запускает и с ними не общается.</div>
+
+<section>
+  <h2>Что вы увидите, набрав <code>tutti</code></h2>
+  <p style="margin-bottom:10px">Терминальный интерфейс (TUI) во вкладке Rider. Данные — реальный снимок вашей машины сегодня, 11:40. План сверху — пример.</p>
+<pre class="term"><span class="h"> tutti  пт 06.11   Unity 4 открыто   забытых сессий 6                    [p]лан  [r]обновить  [q]выход</span>
+<span class="d"> ЗАДАЧА / КЛОН        СЕССИЯ                       СОСТОЯНИЕ   STAGED  ИТОГ</span>
+ claw RT leak fix                                                  <span class="d">BaseRun-parallel → AWay, TowerKing · oracle</span>
+<span class="sel">   BaseRun-parallel   RenderTexture fix            ждёт 5ч       2     <span class="w">передал другим</span>       </span>
+   AWay               Claw Machine tests           ждёт 4ч       2     <span class="r">REVIEW</span>
+   TowerKing          Remove post-particles delay  ждёт 5ч       2     <span class="r">REVIEW</span>
+ shop reskin                                                       <span class="d">BaseRun · oracle</span>
+   BaseRun            —  нет сессии, 90 незакоммиченных        <span class="a">занят старой работой → взять BaseRun-parallel?</span>
+ вне плана
+   AWay               Fix Format-CS                ждёт 1ч       2     <span class="r">REVIEW</span>  <span class="a">тот же индекс, что Claw tests</span>
+   TowerKing          towerking-7f                 ждёт 3ч       2     <span class="r">REVIEW</span>
+ <span class="s">забытые</span>  away-c1 666ч · away-08 93ч · Full cycle skill 90ч · baserun-02/87/9d 64–67ч
+ <span class="d">свободны</span> Cafe · RaceMith · SpaceInc · AWay-parallel · SpaceInc-parallel
+<span class="d"> ────────────────────────────────────────────────────────────────────────────────────────────────────
+ enter  окно Rider на клоне    u  открыть Unity нужной версии    c  скопировать команду старта    / фильтр</span></pre>
+  <p class="note">Честная оговорка: если в одном клоне две сессии (AWay), git не скажет, чья правка в индексе. Показываем обе и помечаем.</p>
+</section>
+
+<section>
+  <h2>Утреннее планирование</h2>
+  <p style="margin-bottom:12px">Распределение новой работы дня по проектам, клонам и редакторам. Задачи к вам приходят текстом (тикет, ссылка, скриншот), поэтому вход — простой список, который вы пишете сами.</p>
+  <div class="flow">
+    <div class="panel step"><b>1 · пишете список</b><code>tutti plan</code> открывает в Rider файл <code>today.md</code>. Одна строка на задачу.<div class="who">вы, 1–2 мин</div></div>
+    <div class="panel step"><b>2 · инструмент раскладывает</b>Какой клон свободен, где занят — предлагает параллельный. Какие Unity нужны и не больше ли 4. Какие забытые сессии закрыть.<div class="who">tutti</div></div>
+    <div class="panel step"><b>3 · подготовка</b>Открывает Unity нужной версии (у вас их 4: от 2021.3 до 6000.3.25) и окно Rider на клоне, копирует команду старта, например <code>/full-cycle …</code>.<div class="who">tutti, по кнопке</div></div>
+    <div class="panel step"><b>4 · работа</b>Новая вкладка в Rider, <code>claude</code>, вставили команду. Имя задачи — имя сессии, по нему статус собирается под строкой плана.<div class="who">вы, в Rider</div></div>
+  </div>
+<pre class="term" style="margin-top:12px"><span class="p"># today.md — имя задачи · где начинать → куда переносить · нужен ли Oracle</span>
+- claw RT leak fix     BaseRun-parallel -> AWay, TowerKing   oracle
+- shop reskin          BaseRun                               oracle
+- tags refactor        GalaxyGuardians</pre>
+  <div class="grid2" style="margin-top:12px">
+    <div class="panel box yes"><h4>Полезно, когда</h4><ul>
+      <li>две задачи претендуют на один клон или редактор</li>
+      <li>фича расходится на несколько проектов, и нужно видеть, где её можно проверить (вчера: «в BaseRun нет клешни, проверяем в AWay»)</li>
+      <li>нужно вспомнить, какую версию Unity открыть для какого клона</li></ul></div>
+    <div class="panel box no"><h4>Станет ритуалом, если</h4><ul>
+      <li>планировать обязательно каждый день</li>
+      <li>файл надо держать в синхроне с реальностью (инструмент его только читает)</li>
+      <li>появятся оценки, расписание, ручное переключение стадий</li>
+      <li>задачу вне плана завести сложнее, чем по плану</li></ul></div>
+  </div>
+</section>
+
+<section>
+  <h2>Терминал или веб</h2>
+  <div class="grid2">
+    <div class="col">
+      <h3>TUI во вкладке Rider<span class="rec">начать с этого</span></h3>
+      <div class="panel box"><ul>
+        <li>Живёт рядом с агентами, браузер не нужен</li>
+        <li>Go + Bubble Tea, один бинарник без зависимостей</li>
+        <li>Встраиваемый режим: без перехвата всего экрана (alt-screen) и мыши. Именно полноэкранный режим, по мнению Fable, глючит в терминале Rider (у herdr). Проверим первым делом</li>
+        <li>Запасной вариант — просто печать таблицы (<code>tutti status</code>)</li></ul></div>
+    </div>
+    <div class="col">
+      <h3>Веб на localhost</h3>
+<pre class="term"><span class="h"> tutti · localhost:7711         Unity 4/4  забытых 6</span>
+ ┌ Сегодня ─────────────┐ ┌ Статус ─────────────────────┐
+ │ claw RT leak fix     │ │ AWay   Claw tests  REVIEW [diff]│
+ │  BR-par→AWay ✓ TK ✓  │ │ TK     Remove p-d  REVIEW [diff]│
+ │ shop reskin  BaseRun │ │ BR-par RT fix      передал      │
+ │ tags  GalaxyGuardians│ │ …                               │
+ └──────────────────────┘ └─────────────────────────────────┘
+ ┌ Скриншоты full-cycle ┐  свободны: Cafe RaceMith SpaceInc…
+ └──────────────────────┘</pre>
+      <div class="panel box"><ul>
+        <li>Тот же бинарник: <code>tutti web</code>, без фонового сервиса</li>
+        <li>Выигрывает, когда хочется смотреть: diff, скриншоты full-cycle, план и статус рядом на втором мониторе</li></ul></div>
+    </div>
+  </div>
+  <p class="note">Модель данных у обоих общая, поэтому веб можно добавить позже без переделок. Все трое за то, чтобы начать с TUI.</p>
+</section>
+
+<section>
+  <h2>Название</h2>
+  <div class="panel scroll"><table>
+    <tr><th>Команда</th><th>Смысл</th><th>Автор</th></tr>
+    <tr><td class="n">tutti</td><td>В оркестре «играют все»: вся картина целиком. Пять букв, ни с чем не путается</td><td>Fable</td></tr>
+    <tr><td class="n">baton</td><td>Палочка дирижёра: распределяет работу, сама не играет и ни с кем не разговаривает</td><td>Fable</td></tr>
+    <tr><td class="n">podium</td><td>Место дирижёра, откуда видно все группы</td><td>Fable</td></tr>
+    <tr><td class="n">roster</td><td>Расстановка: кто на чём занят и кто свободен</td><td>Codex</td></tr>
+    <tr><td class="n">docket</td><td>Повестка дня, без намёка на редактор</td><td>Codex</td></tr>
+    <tr><td class="n">relay</td><td>Эстафета: передача фичи между проектами</td><td>Codex</td></tr>
+  </table></div>
+  <p class="note">Папку <code>orchestra</code> тоже стоит переименовать, если выберете имя: она звучит близко к Orca.</p>
+</section>
+
+<section>
+  <h2>План</h2>
+  <ol class="steps">
+    <li class="panel"><div><b>Проверка в терминале Rider.</b> Крошечный Bubble Tea во встраиваемом режиме: перерисовка, ресайз, клавиши.</div><span class="t">30 мин</span></li>
+    <li class="panel"><div><b>Статус.</b> Таблица клонов, сессий, REVIEW / забытых / свободных + <code>tutti status</code> текстом.</div><span class="t">полдня</span></li>
+    <li class="panel"><div><b>План дня.</b> <code>today.md</code>, группировка статуса по задачам, открытие Unity нужной версии и окна Rider, копирование команды старта.</div><span class="t">полдня</span></li>
+    <li class="panel"><div><b>Неделя использования.</b> Веб — только если захочется смотреть diff и скриншоты.</div><span class="t">—</span></li>
+  </ol>
+</section>
+
+<section>
+  <h2>Что решить вам</h2>
+  <ol class="q">
+    <li>Имя: одно из шести или своё.</li>
+    <li>Формат строки в <code>today.md</code> подходит? «Откуда → куда» и пометка <code>oracle</code>.</li>
+    <li>Сессии Codex показывать сразу?</li>
+  </ol>
+</section>
+
+</main>
+</body>
+</html>
