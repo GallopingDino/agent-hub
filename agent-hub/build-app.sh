@@ -6,6 +6,14 @@ readonly ROOT="$(cd "$(dirname "$0")" && pwd)"
 readonly APP="$ROOT/.build/Agent Hub.app"
 readonly INSTALLED_APP="$HOME/Applications/Agent Hub.app"
 readonly CLI_LINK="$HOME/.local/bin/agent-hub"
+# Liquid Glass needs the macOS 26+ SDK; the default Xcode stays untouched for Unity iOS builds.
+readonly LIQUID_GLASS_XCODE="/Applications/Xcode-27.app/Contents/Developer"
+
+if [[ -d "$LIQUID_GLASS_XCODE" ]]; then
+    export DEVELOPER_DIR="$LIQUID_GLASS_XCODE"
+else
+    echo "warning: $LIQUID_GLASS_XCODE not found, building with the default Xcode; the panel falls back to imitation glass" >&2
+fi
 
 # A stable certificate keeps the macOS Documents permission across rebuilds; ad-hoc signing resets it every time.
 signing_identity="$(security find-identity -v -p codesigning | awk -F'"' '/Apple Development/ { print $2; exit }')"

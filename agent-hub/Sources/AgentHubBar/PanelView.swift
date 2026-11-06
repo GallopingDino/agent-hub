@@ -240,7 +240,7 @@ private struct SettingsMenu: View {
             Image(systemName: "slider.horizontal.3")
                 .font(.system(size: 12, weight: .medium))
                 .frame(width: 28, height: 28)
-                .background(GlassCircle())
+                .glassCircle()
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
@@ -260,7 +260,7 @@ private struct NoticeBanner: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(GlassShape(cornerRadius: 12, tint: isWarning ? .orange : nil))
+            .glassSurface(cornerRadius: 12, tint: isWarning ? .orange : nil)
             .padding(.horizontal, isWarning ? 0 : 10)
             .padding(.top, isWarning ? 0 : 4)
     }
@@ -294,7 +294,7 @@ private struct GroupCard: View {
                 .padding(.bottom, 4)
             }
         }
-        .background(GlassShape(cornerRadius: 16, tint: isMergeTarget ? .accentColor : nil, isRaised: isDragged))
+        .glassSurface(cornerRadius: 16, tint: isMergeTarget ? .accentColor : nil, isRaised: isDragged)
         .overlay(alignment: .topTrailing) {
             if isMergeTarget {
                 Label("Merge into \(group.title)", systemImage: "arrow.triangle.merge")
@@ -568,28 +568,64 @@ private struct ProjectChip: View {
     }
 }
 
-private struct GlassShape: View {
-    let cornerRadius: CGFloat
-    var tint: Color?
-    var isRaised = false
+private extension View {
+    func glassSurface(cornerRadius: CGFloat, tint: Color? = nil, isRaised: Bool = false) -> some View {
+        modifier(GlassSurface(shape: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous), tint: tint, isRaised: isRaised, isInteractive: false))
+    }
 
-    var body: some View {
-        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        shape
-            .fill(.thinMaterial)
-            .overlay(shape.fill((tint ?? .clear).opacity(0.12)))
-            .overlay(shape.strokeBorder(LinearGradient(colors: [.white.opacity(0.28), .white.opacity(0.05)], startPoint: .top, endPoint: .bottom), lineWidth: 0.7))
-            .overlay(tint.map { shape.strokeBorder($0.opacity(0.7), lineWidth: 1.5) })
-            .shadow(color: .black.opacity(isRaised ? 0.32 : 0.1), radius: isRaised ? 18 : 5, y: isRaised ? 10 : 2)
+    func glassCircle(isInteractive: Bool = false) -> some View {
+        modifier(GlassSurface(shape: Circle(), tint: nil, isRaised: false, isInteractive: isInteractive))
     }
 }
 
-private struct GlassCircle: View {
-    var body: some View {
-        Circle()
-            .fill(.thinMaterial)
-            .overlay(Circle().strokeBorder(LinearGradient(colors: [.white.opacity(0.3), .white.opacity(0.06)], startPoint: .top, endPoint: .bottom), lineWidth: 0.6))
-            .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
+// Real Liquid Glass on macOS 26 when built with the Xcode 26+ SDK; a material imitation otherwise.
+private struct GlassSurface<SurfaceShape: InsettableShape>: ViewModifier {
+    let shape: SurfaceShape
+    let tint: Color?
+    let isRaised: Bool
+    let isInteractive: Bool
+
+    func body(content: Content) -> some View {
+        surface(content)
+            .shadow(color: .black.opacity(isRaised ? 0.3 : 0), radius: isRaised ? 18 : 0, y: isRaised ? 10 : 0)
+    }
+
+    @ViewBuilder
+    private func surface(_ content: Content) -> some View {
+        #if compiler(>=6.2)
+        if #available(macOS 26, *) {
+            content
+                .glassEffect(makeGlass(), in: shape)
+                .overlay(tint.map { shape.strokeBorder($0.opacity(0.7), lineWidth: 1.5) })
+        }
+        else {
+            imitation(content)
+        }
+        #else
+        imitation(content)
+        #endif
+    }
+
+    #if compiler(>=6.2)
+    @available(macOS 26, *)
+    private func makeGlass() -> Glass {
+        var glass = Glass.regular
+        if let tint {
+            glass = glass.tint(tint.opacity(0.3))
+        }
+        return isInteractive ? glass.interactive() : glass
+    }
+    #endif
+
+    private func imitation(_ content: Content) -> some View {
+        content.background(
+            shape
+                .fill(.thinMaterial)
+                .overlay(shape.fill((tint ?? .clear).opacity(0.12)))
+                .overlay(shape.strokeBorder(LinearGradient(colors: [.white.opacity(0.28), .white.opacity(0.05)], startPoint: .top, endPoint: .bottom), lineWidth: 0.7))
+                .overlay(tint.map { shape.strokeBorder($0.opacity(0.7), lineWidth: 1.5) })
+                .shadow(color: .black.opacity(0.1), radius: 5, y: 2)
+        )
     }
 }
 
@@ -611,7 +647,7 @@ private struct GlassIconButtonStyle: ButtonStyle {
                 .font(.system(size: diameter * 0.44, weight: .medium))
                 .frame(width: diameter, height: diameter)
                 .foregroundStyle(isEnabled ? (isHovered ? Color.accentColor : Color.primary) : Color.secondary.opacity(0.5))
-                .background(GlassCircle().opacity(isHovered || configuration.isPressed ? 1 : 0.7))
+                .glassCircle(isInteractive: true)
                 .scaleEffect(configuration.isPressed ? 0.92 : 1)
                 .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
                 .onHover { isHovered = $0 }
