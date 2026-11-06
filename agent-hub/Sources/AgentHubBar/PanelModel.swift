@@ -101,6 +101,17 @@ final class PanelModel: ObservableObject {
         applyTaskName(trimmed, to: group.sessions, replacingGroupId: group.id)
     }
 
+    func renameSession(_ session: PanelSession, to newName: String) {
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false, trimmed != session.title else { return }
+        Task {
+            if let reason = await HubClient.rename(session, to: trimmed) {
+                showNotice(reason)
+            }
+            await refresh()
+        }
+    }
+
     func mergeTask(_ sourceId: String, into target: SessionGroup) {
         guard let source = groups.first(where: { $0.id == sourceId }), source.id != target.id else { return }
         applyTaskName(target.title, to: source.sessions, replacingGroupId: source.id)

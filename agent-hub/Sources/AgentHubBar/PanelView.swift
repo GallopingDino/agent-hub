@@ -406,6 +406,9 @@ private struct SessionRow: View {
     let isShowingProject: Bool
     @ObservedObject var model: PanelModel
     @State private var isHovered = false
+    @State private var isRenaming = false
+    @State private var draftName = ""
+    @FocusState private var isNameFieldFocused: Bool
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -413,9 +416,7 @@ private struct SessionRow: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Text(session.title)
-                        .font(.system(size: 13, weight: .medium))
-                        .lineLimit(1)
+                    title
                     if isShowingProject {
                         ProjectChip(name: session.projectName)
                     }
@@ -446,11 +447,47 @@ private struct SessionRow: View {
         .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
         .onHover { isHovered = $0 }
         .onTapGesture {
-            if session.hasTerminalTab {
+            if session.hasTerminalTab && isRenaming == false {
                 model.showAgent(session)
             }
         }
         .help(session.hasTerminalTab ? focusHelp : "No Rider terminal tab found for this session")
+    }
+
+    @ViewBuilder
+    private var title: some View {
+        if isRenaming {
+            TextField("Session name", text: $draftName)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13, weight: .medium))
+                .focused($isNameFieldFocused)
+                .onSubmit(commitRename)
+                .onExitCommand { isRenaming = false }
+                .onChange(of: isNameFieldFocused) { _, isFocused in
+                    if isFocused == false { isRenaming = false }
+                }
+                .padding(.horizontal, 4)
+                .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(Color.primary.opacity(0.08)))
+                .frame(maxWidth: 220)
+        }
+        else {
+            Text(session.title)
+                .font(.system(size: 13, weight: .medium))
+                .lineLimit(1)
+                .onTapGesture(count: 2, perform: startRename)
+                .help("Double-click to rename the session")
+        }
+    }
+
+    private func startRename() {
+        draftName = session.title
+        isRenaming = true
+        DispatchQueue.main.async { isNameFieldFocused = true }
+    }
+
+    private func commitRename() {
+        isRenaming = false
+        model.renameSession(session, to: draftName)
     }
 
     private var actions: some View {
