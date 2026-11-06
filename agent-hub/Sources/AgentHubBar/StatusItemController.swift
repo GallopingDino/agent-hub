@@ -111,7 +111,15 @@ final class StatusItemController: NSObject {
         statusItem.button?.highlight(true)
         // The panel cannot take keyboard focus from the active app, so its keys are grabbed only while it is shown.
         escapeHotKey = GlobalHotKey(keyCode: kVK_Escape, modifiers: 0) {
-            DispatchQueue.main.async { [weak self] in self?.hidePanel() }
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                if self.model.isSettingsMenuOpen {
+                    self.model.closeSettingsMenu()
+                }
+                else {
+                    self.hidePanel()
+                }
+            }
         }
         updateLetterHotKeys(isEditingName: model.isEditingName)
         outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
@@ -132,7 +140,7 @@ final class StatusItemController: NSObject {
         outsideClickMonitor = nil
     }
 
-    // R refreshes and S opens the settings menu, only while the panel is shown and no name is being typed.
+    // R refreshes and S toggles the settings menu, only while the panel is shown and no name is being typed.
     private func updateLetterHotKeys(isEditingName: Bool) {
         guard panel.isVisible, isEditingName == false else {
             refreshHotKey = nil
@@ -150,7 +158,12 @@ final class StatusItemController: NSObject {
         settingsHotKey = GlobalHotKey(keyCode: kVK_ANSI_S, modifiers: 0) {
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
-                self.model.showSettingsMenu(at: self.findSettingsMenuPoint())
+                if self.model.isSettingsMenuOpen {
+                    self.model.closeSettingsMenu()
+                }
+                else {
+                    self.model.showSettingsMenu(at: self.findSettingsMenuPoint())
+                }
             }
         }
     }

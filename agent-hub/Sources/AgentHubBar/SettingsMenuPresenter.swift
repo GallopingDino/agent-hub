@@ -5,6 +5,12 @@ import AppKit
 final class SettingsMenuPresenter: NSObject {
     private unowned let model: PanelModel
 
+    private var openMenu: NSMenu?
+
+    var isOpen: Bool {
+        openMenu != nil
+    }
+
     init(model: PanelModel) {
         self.model = model
     }
@@ -33,7 +39,13 @@ final class SettingsMenuPresenter: NSObject {
         menu.addItem(.separator())
         menu.addItem(makeItem("Quit Agent Hub", #selector(quit)))
 
+        openMenu = menu
         menu.popUp(positioning: nil, at: point ?? NSEvent.mouseLocation, in: nil)
+        openMenu = nil
+    }
+
+    func close() {
+        openMenu?.cancelTracking()
     }
 
     private func addUsageItems(to menu: NSMenu) {

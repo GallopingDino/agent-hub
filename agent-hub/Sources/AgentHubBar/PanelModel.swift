@@ -43,6 +43,10 @@ final class PanelModel: ObservableObject {
         usage.contains(where: \.isRunningLow)
     }
 
+    var isSettingsMenuOpen: Bool {
+        settingsMenu.isOpen
+    }
+
     var groups: [SessionGroup] {
         SessionGrouping.makeGroups(status?.sessions ?? [], mode: groupingMode, savedOrder: readGroupOrder())
     }
@@ -81,6 +85,10 @@ final class PanelModel: ObservableObject {
     // Without a point the menu opens at the mouse, as for a click on its button.
     func showSettingsMenu(at point: NSPoint? = nil) {
         settingsMenu.show(at: point)
+    }
+
+    func closeSettingsMenu() {
+        settingsMenu.close()
     }
 
     func wakeUpAgents() {
