@@ -504,7 +504,6 @@ private struct SessionRow: View {
                     .help("Open the page this agent published")
             }
         }
-        .frame(width: 26 * 3 + 4 * 2, alignment: .leading)
         .buttonStyle(GlassIconButtonStyle(diameter: 26))
         .opacity(isHovered || session.isNeedingUser ? 1 : 0.5)
     }

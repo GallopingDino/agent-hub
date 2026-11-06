@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import Combine
 import SwiftUI
 
@@ -15,6 +16,7 @@ final class StatusItemController: NSObject {
 
     private var subscriptions: Set<AnyCancellable> = []
     private var outsideClickMonitor: Any?
+    private var escapeHotKey: GlobalHotKey?
     private var panelTop: CGFloat = 0
 
     init(model: PanelModel) {
@@ -23,6 +25,7 @@ final class StatusItemController: NSObject {
         statusItem.autosaveName = "AgentHubStatusItem"
         panel = AnchoredPanel()
         super.init()
+        panel.onCancel = { [weak self] in self?.hidePanel() }
 
         configureStatusButton()
         configurePanel()
@@ -73,7 +76,7 @@ final class StatusItemController: NSObject {
         NotificationCenter.default.addObserver(self, selector: #selector(applicationDidResignActive), name: NSApplication.didResignActiveNotification, object: nil)
     }
 
-    @objc private func togglePanel() {
+    @objc func togglePanel() {
         if panel.isVisible {
             hidePanel()
         }
@@ -96,6 +99,10 @@ final class StatusItemController: NSObject {
         NSApp.activate()
         panel.makeKeyAndOrderFront(nil)
         statusItem.button?.highlight(true)
+        // The panel cannot take keyboard focus from the active app, so Esc is grabbed only while the panel is shown.
+        escapeHotKey = GlobalHotKey(keyCode: kVK_Escape, modifiers: 0) {
+            DispatchQueue.main.async { [weak self] in self?.hidePanel() }
+        }
         outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             Task { @MainActor in self?.hidePanel() }
         }
@@ -106,6 +113,7 @@ final class StatusItemController: NSObject {
         panel.orderOut(nil)
         statusItem.button?.highlight(false)
         model.panelDidClose()
+        escapeHotKey = nil
         if let outsideClickMonitor {
             NSEvent.removeMonitor(outsideClickMonitor)
         }
@@ -127,6 +135,8 @@ final class StatusItemController: NSObject {
 }
 
 private final class AnchoredPanel: NSPanel {
+    var onCancel: (() -> Void)?
+
     init() {
         super.init(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
         isOpaque = false
@@ -139,4 +149,8 @@ private final class AnchoredPanel: NSPanel {
     }
 
     override var canBecomeKey: Bool { true }
+
+    override func cancelOperation(_ sender: Any?) {
+        onCancel?()
+    }
 }
