@@ -27,6 +27,7 @@ final class StatusItemController: NSObject {
         panel = AnchoredPanel()
         super.init()
         panel.onCancel = { [weak self] in self?.hidePanel() }
+        model.onLeavingForEditor = { [weak self] in self?.hidePanel() }
 
         configureStatusButton()
         configurePanel()

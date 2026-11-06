@@ -24,6 +24,8 @@ final class PanelModel: ObservableObject {
     private var isPanelOpen = false
     private var refreshLoop: Task<Void, Never>?
 
+    var onLeavingForEditor: (() -> Void)?
+
     var attentionCount: Int {
         status?.sessions.filter(\.isNeedingUser).count ?? 0
     }
@@ -60,15 +62,18 @@ final class PanelModel: ObservableObject {
 
     func showAgent(_ session: PanelSession) {
         let isOpeningFiles = isOpeningEditedFilesOnFocus
+        onLeavingForEditor?()
         Task { await HubClient.showAgent(session, isOpeningEditedFiles: isOpeningFiles) }
     }
 
     func openArtifact(_ session: PanelSession) {
+        onLeavingForEditor?()
         Task { await HubClient.openArtifact(session) }
     }
 
     func showUnityEditor(pid: Int32) {
         guard let editor = NSRunningApplication(processIdentifier: pid) else { return }
+        onLeavingForEditor?()
         if #available(macOS 14, *) {
             NSApp.yieldActivation(to: editor)
             editor.activate()
