@@ -10,7 +10,7 @@ usage:
   agent-hub review <session>      open-files, then focus
   agent-hub open-artifact <session>  open the last artifact the agent published
   agent-hub focus-unity <session|clone>  bring the clone's Unity editor to the front
-  agent-hub rename <session> <new name>  rename an idle Claude session by typing /rename into its tab
+  agent-hub rename <session> <new name>  rename a Claude session by typing /rename into its tab
 
 <session> is a session name, a session id prefix or a pid.
 """

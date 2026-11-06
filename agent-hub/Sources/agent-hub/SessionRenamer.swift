@@ -7,7 +7,6 @@ enum SessionRenamer {
     // Ctrl+S stashes any half-typed draft; Claude Code restores it by itself after /rename is submitted.
     static func rename(_ session: AgentSession, to newName: String) -> String? {
         switch session.state {
-        case .working: return "the agent is working; rename it when it is idle"
         case .waiting: return "the agent is waiting for an answer (\(session.waitingFor ?? "input")); typed text would answer it"
         default: break
         }
