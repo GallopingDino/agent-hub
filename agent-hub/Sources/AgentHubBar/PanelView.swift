@@ -20,12 +20,18 @@ struct PanelView: View {
             }
             .frame(height: min(listHeight, Self.maxListHeight))
             .onPreferenceChange(ListHeightKey.self) { listHeight = $0 }
-            Divider()
-            PanelFooter(model: model)
+            if freeClones.isEmpty == false {
+                Divider()
+                PanelFooter(freeClones: freeClones)
+            }
         }
         .frame(width: 460)
         .onAppear { model.panelDidOpen() }
         .onDisappear { model.panelDidClose() }
+    }
+
+    private var freeClones: [PanelClone] {
+        model.status?.clones.filter { $0.isRunning && $0.isFree } ?? []
     }
 
     @ViewBuilder
@@ -35,10 +41,9 @@ struct PanelView: View {
                 if status.isAgentTabsAvailable == false {
                     PluginWarning()
                 }
-                sessionSection("Needs you", status.sessions.filter(\.isNeedingUser))
-                sessionSection("Working", status.sessions.filter { $0.state == "working" })
-                sessionSection("Idle", status.sessions.filter { $0.state == "idle" })
-                staleSection(status.sessions.filter { $0.state == "stale" })
+                ForEach(model.groups) { group in
+                    groupSection(group)
+                }
             }
         }
         else {
@@ -51,20 +56,9 @@ struct PanelView: View {
         }
     }
 
-    @ViewBuilder
-    private func sessionSection(_ title: String, _ sessions: [PanelSession]) -> some View {
-        if sessions.isEmpty == false {
-            VStack(alignment: .leading, spacing: 2) {
-                SectionTitle(title: title, count: sessions.count)
-                ForEach(sessions) { SessionRow(session: $0, model: model) }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func staleSection(_ sessions: [PanelSession]) -> some View {
-        if sessions.isEmpty == false {
-            VStack(alignment: .leading, spacing: 2) {
+    private func groupSection(_ group: SessionGroup) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            if group.isForgotten {
                 Button {
                     withAnimation(.easeOut(duration: 0.15)) { isStaleExpanded.toggle() }
                 } label: {
@@ -72,18 +66,73 @@ struct PanelView: View {
                         Image(systemName: "chevron.right")
                             .font(.system(size: 9, weight: .bold))
                             .rotationEffect(.degrees(isStaleExpanded ? 90 : 0))
-                        SectionTitle(title: "Forgotten", count: sessions.count)
+                        SectionTitle(title: group.title, count: group.sessions.count)
                     }
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .padding(.leading, 10)
+            }
+            else if group.isReorderable {
+                GroupHeader(group: group, mode: model.groupingMode, model: model)
+            }
+            else {
+                SectionTitle(title: group.title, count: group.sessions.count)
+            }
 
-                if isStaleExpanded {
-                    ForEach(sessions) { SessionRow(session: $0, model: model) }
-                }
+            if group.isForgotten == false || isStaleExpanded {
+                ForEach(group.sessions) { SessionRow(session: $0, isShowingProject: model.groupingMode != .project, model: model) }
             }
         }
+    }
+}
+
+private struct GroupHeader: View {
+    let group: SessionGroup
+    let mode: GroupingMode
+    @ObservedObject var model: PanelModel
+    @State private var isDropTarget = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.tertiary)
+            if mode == .project {
+                ProjectChip(name: group.title)
+            }
+            else {
+                Text(group.title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .lineLimit(1)
+                ForEach(projectNames, id: \.self) { ProjectChip(name: $0) }
+            }
+            Text("\(group.sessions.count)")
+                .font(.system(size: 10, weight: .semibold).monospacedDigit())
+                .foregroundStyle(.secondary)
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 3)
+        .background(RoundedRectangle(cornerRadius: 6).fill(isDropTarget ? Color.accentColor.opacity(0.18) : Color.clear).padding(.horizontal, 6))
+        .contentShape(Rectangle())
+        .draggable(group.id)
+        .dropDestination(for: String.self) { items, _ in
+            guard let movedId = items.first else { return false }
+            withAnimation(.easeOut(duration: 0.15)) { model.moveGroup(movedId, before: group.id) }
+            return true
+        } isTargeted: { isDropTarget = $0 }
+        .contextMenu {
+            Button("Move to top") { model.moveGroup(group.id, by: -1000) }
+            Button("Move up") { model.moveGroup(group.id, by: -1) }
+            Button("Move down") { model.moveGroup(group.id, by: 1) }
+        }
+        .help("Drag to reorder groups")
+    }
+
+    private var projectNames: [String] {
+        var seen: Set<String> = []
+        return group.sessions.map(\.projectName).filter { seen.insert($0).inserted }
     }
 }
 
@@ -117,6 +166,7 @@ private struct PanelHeader: View {
             .buttonStyle(IconButtonStyle())
             .disabled(model.isRefreshing)
             .help("Refresh now")
+            SettingsMenu(model: model)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -128,6 +178,32 @@ private struct PanelHeader: View {
         let working = status.sessions.filter { $0.state == "working" }.count
         let counts = needing > 0 ? "\(needing) need you · \(working) working" : "Nothing waits for you · \(working) working"
         return Text("\(counts) · updated ") + Text(status.generatedAt, style: .relative) + Text(" ago")
+    }
+}
+
+private struct SettingsMenu: View {
+    @ObservedObject var model: PanelModel
+
+    var body: some View {
+        Menu {
+            Picker("Group by", selection: $model.groupingMode) {
+                ForEach(GroupingMode.allCases) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.inline)
+            Button("Reset group order") { model.resetGroupOrder() }
+                .disabled(model.groupingMode.isReorderable == false)
+            Divider()
+            Toggle("Open edited files on focus", isOn: $model.isOpeningEditedFilesOnFocus)
+            Divider()
+            Button("Quit Agent Hub") { NSApplication.shared.terminate(nil) }
+        } label: {
+            Image(systemName: "gearshape")
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .frame(width: 24, height: 24)
+        .help("Grouping and settings")
     }
 }
 
@@ -155,6 +231,7 @@ private struct SectionTitle: View {
 
 private struct SessionRow: View {
     let session: PanelSession
+    let isShowingProject: Bool
     @ObservedObject var model: PanelModel
     @State private var isHovered = false
 
@@ -167,7 +244,9 @@ private struct SessionRow: View {
                     Text(session.title)
                         .font(.system(size: 13, weight: .medium))
                         .lineLimit(1)
-                    ProjectChip(name: session.projectName)
+                    if isShowingProject {
+                        ProjectChip(name: session.projectName)
+                    }
                     Spacer(minLength: 4)
                     Text(IdleFormatter.format(session.idleSeconds))
                         .font(.system(size: 11).monospacedDigit())
@@ -298,56 +377,23 @@ private struct PluginWarning: View {
 }
 
 private struct PanelFooter: View {
-    @ObservedObject var model: PanelModel
+    let freeClones: [PanelClone]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let clones = model.status?.clones {
-                cloneRow("Unity", clones.filter { $0.unityPid != nil }, isClickable: true)
-                cloneRow("Free", clones.filter(\.isFree), isClickable: false)
-            }
-            HStack {
-                Toggle(isOn: $model.isOpeningEditedFilesOnFocus) {
-                    Text("Open edited files on focus").font(.system(size: 11))
-                }
-                .toggleStyle(.switch)
-                .controlSize(.mini)
-                Spacer()
-                Button("Quit") { NSApplication.shared.terminate(nil) }
-                    .buttonStyle(.borderless)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-    }
-
-    private func cloneRow(_ title: String, _ clones: [PanelClone], isClickable: Bool) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(title.uppercased())
+            Text("FREE")
                 .font(.system(size: 10, weight: .semibold))
                 .tracking(0.6)
                 .foregroundStyle(.secondary)
-                .frame(width: 40, alignment: .leading)
-            if clones.isEmpty {
-                Text("—").font(.system(size: 11)).foregroundStyle(.tertiary)
-            }
-            else {
-                FlowLayout(spacing: 4) {
-                    ForEach(clones) { clone in
-                        if isClickable, let pid = clone.unityPid {
-                            Button { model.showUnityEditor(pid: pid) } label: { ProjectChip(name: clone.name) }
-                                .buttonStyle(.plain)
-                                .help("Show the \(clone.name) Unity editor")
-                        }
-                        else {
-                            ProjectChip(name: clone.name)
-                        }
-                    }
-                }
+                .fixedSize()
+            FlowLayout(spacing: 4) {
+                ForEach(freeClones) { ProjectChip(name: $0.name) }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .help("Clones open in Rider or Unity with no agent and no local changes")
     }
 }
 

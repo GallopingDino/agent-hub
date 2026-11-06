@@ -6,8 +6,17 @@ final class PanelModel: ObservableObject {
     private static let openPanelRefreshSeconds: UInt64 = 10
     private static let closedPanelRefreshSeconds: UInt64 = 120
 
-    @AppStorage("isOpeningEditedFilesOnFocus") var isOpeningEditedFilesOnFocus = true
+    private let defaults = UserDefaults.standard
 
+    @Published var isOpeningEditedFilesOnFocus: Bool {
+        didSet { defaults.set(isOpeningEditedFilesOnFocus, forKey: "isOpeningEditedFilesOnFocus") }
+    }
+    @Published var groupingMode: GroupingMode {
+        didSet { defaults.set(groupingMode.rawValue, forKey: "groupingMode") }
+    }
+    @Published private var groupOrderByMode: [String: [String]] {
+        didSet { defaults.set(groupOrderByMode, forKey: "groupOrderByMode") }
+    }
     @Published private(set) var status: PanelStatus?
     @Published private(set) var isRefreshing = false
 
@@ -18,7 +27,14 @@ final class PanelModel: ObservableObject {
         status?.sessions.filter(\.isNeedingUser).count ?? 0
     }
 
+    var groups: [SessionGroup] {
+        SessionGrouping.makeGroups(status?.sessions ?? [], mode: groupingMode, savedOrder: readGroupOrder())
+    }
+
     init() {
+        isOpeningEditedFilesOnFocus = defaults.object(forKey: "isOpeningEditedFilesOnFocus") as? Bool ?? true
+        groupingMode = GroupingMode(rawValue: defaults.string(forKey: "groupingMode") ?? "") ?? .status
+        groupOrderByMode = defaults.dictionary(forKey: "groupOrderByMode") as? [String: [String]] ?? [:]
         startRefreshLoop()
     }
 
@@ -59,6 +75,37 @@ final class PanelModel: ObservableObject {
         else {
             editor.activate(options: [.activateIgnoringOtherApps])
         }
+    }
+
+    func moveGroup(_ movedId: String, before targetId: String) {
+        var order = groups.filter(\.isReorderable).map(\.id)
+        guard movedId != targetId, let from = order.firstIndex(of: movedId) else { return }
+        order.remove(at: from)
+        order.insert(movedId, at: order.firstIndex(of: targetId) ?? order.endIndex)
+        saveGroupOrder(order)
+    }
+
+    func moveGroup(_ movedId: String, by offset: Int) {
+        var order = groups.filter(\.isReorderable).map(\.id)
+        guard let from = order.firstIndex(of: movedId) else { return }
+        let to = min(max(from + offset, 0), order.count - 1)
+        order.remove(at: from)
+        order.insert(movedId, at: to)
+        saveGroupOrder(order)
+    }
+
+    func resetGroupOrder() {
+        groupOrderByMode = [:]
+    }
+
+    private func readGroupOrder() -> [String] {
+        groupOrderByMode[groupingMode.rawValue] ?? []
+    }
+
+    // Groups that are not on screen right now keep their saved place after the visible ones.
+    private func saveGroupOrder(_ visibleOrder: [String]) {
+        let hidden = readGroupOrder().filter { visibleOrder.contains($0) == false }
+        groupOrderByMode[groupingMode.rawValue] = visibleOrder + hidden
     }
 
     private func startRefreshLoop() {

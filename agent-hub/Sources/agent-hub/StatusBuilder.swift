@@ -19,6 +19,7 @@ enum StatusBuilder {
         }
         .sorted { ($0.state.sortOrder, $0.idleSeconds) < ($1.state.sortOrder, $1.idleSeconds) }
 
+        let riderProjects = RiderRecentProjects.readOpenProjectPaths()
         var worktreeCache = WorktreeChangesCache()
         let clones = clonePaths.map { path in
             let sessionCount = sessions.filter { $0.clonePath == path }.count
@@ -32,6 +33,7 @@ enum StatusBuilder {
                 stagedCount: stagedCount,
                 changedCount: changedCount,
                 unityPid: processTable.unityEditorPidByProject[path],
+                isOpenInRider: riderProjects.contains(path),
                 sessionCount: sessionCount,
                 isFree: isFreeCandidate && changedCount == 0
             )

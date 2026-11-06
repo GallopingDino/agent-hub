@@ -30,12 +30,25 @@ struct PanelSession: Decodable, Identifiable {
     var projectName: String { cloneName ?? (workingDirectory as NSString).lastPathComponent }
 
     var isNeedingUser: Bool { state == "waiting" || state == "review" }
+
+    var stateOrder: Int {
+        switch state {
+        case "waiting": return 0
+        case "review": return 1
+        case "working": return 2
+        case "idle": return 3
+        default: return 4
+        }
+    }
 }
 
 struct PanelClone: Decodable, Identifiable {
     let name: String
     let unityPid: Int32?
+    let isOpenInRider: Bool
     let isFree: Bool
 
     var id: String { name }
+
+    var isRunning: Bool { unityPid != nil || isOpenInRider }
 }

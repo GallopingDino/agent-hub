@@ -43,6 +43,7 @@ struct CloneState: Codable {
     let stagedCount: Int
     let changedCount: Int?
     let unityPid: Int32?
+    let isOpenInRider: Bool
     let sessionCount: Int
     let isFree: Bool
 }
