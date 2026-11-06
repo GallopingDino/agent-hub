@@ -1,3 +1,4 @@
+import ChildProcess
 import Foundation
 
 enum HubClient {
@@ -41,31 +42,17 @@ enum HubClient {
     private static func run(_ arguments: [String]) async -> (output: Data?, errorText: String) {
         await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
-                let process = Process()
-                process.executableURL = executable
-                process.arguments = arguments
-
-                let output = Pipe()
-                let errors = Pipe()
-                process.standardOutput = output
-                process.standardError = errors
-
-                do {
-                    try process.run()
-                }
-                catch {
-                    HubLog.write("cannot start \(executable.path): \(error)")
-                    continuation.resume(returning: (nil, "cannot start agent-hub: \(error.localizedDescription)"))
+                guard let result = ChildProcess.run(executable.path, arguments) else {
+                    HubLog.write("cannot start \(executable.path)")
+                    continuation.resume(returning: (nil, "cannot start agent-hub"))
                     return
                 }
 
-                let data = output.fileHandleForReading.readDataToEndOfFile()
-                let errorText = String(decoding: errors.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-                process.waitUntilExit()
-                if process.terminationStatus != 0 || errorText.isEmpty == false {
-                    HubLog.write("agent-hub \(arguments.joined(separator: " ")) exited with \(process.terminationStatus): \(errorText)")
+                let errorText = String(decoding: result.errorOutput, as: UTF8.self)
+                if result.isSuccess == false || errorText.isEmpty == false {
+                    HubLog.write("agent-hub \(arguments.joined(separator: " ")) exited with \(result.exitStatus): \(errorText)")
                 }
-                continuation.resume(returning: (process.terminationStatus == 0 ? data : nil, errorText))
+                continuation.resume(returning: (result.isSuccess ? result.output : nil, errorText))
             }
         }
     }
