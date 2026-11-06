@@ -15,18 +15,18 @@ usage:
 <session> is a session name, a session id prefix or a pid.
 """
 
-func findSession(_ query: String, in status: HubStatus) -> AgentSession? {
-    if let pid = Int32(query), let session = status.sessions.first(where: { $0.pid == pid }) {
+func findSession(_ query: String, in sessions: [AgentSession]) -> AgentSession? {
+    if let pid = Int32(query), let session = sessions.first(where: { $0.pid == pid }) {
         return session
     }
-    if let session = status.sessions.first(where: { $0.name?.caseInsensitiveCompare(query) == .orderedSame }) {
+    if let session = sessions.first(where: { $0.name?.caseInsensitiveCompare(query) == .orderedSame }) {
         return session
     }
-    let byId = status.sessions.filter { $0.sessionId.hasPrefix(query) }
+    let byId = sessions.filter { $0.sessionId.hasPrefix(query) }
     if byId.count == 1 {
         return byId[0]
     }
-    let byName = status.sessions.filter { $0.name?.localizedCaseInsensitiveContains(query) ?? false }
+    let byName = sessions.filter { $0.name?.localizedCaseInsensitiveContains(query) ?? false }
     return byName.count == 1 ? byName[0] : nil
 }
 
@@ -58,8 +58,7 @@ case "status":
 case "focus", "open-files", "review", "open-artifact":
     guard arguments.count >= 2 else { exitWithError(usage) }
     let query = arguments.dropFirst().joined(separator: " ")
-    let status = StatusBuilder.build(config: config)
-    guard let session = findSession(query, in: status) else { exitWithError("no single session matches '\(query)'") }
+    guard let session = findSession(query, in: StatusBuilder.buildSessions(config: config)) else { exitWithError("no single session matches '\(query)'") }
 
     let openableFiles = session.reviewFiles.filter(config.isOpenable)
     let riderProject = session.riderProject ?? session.clonePath ?? session.workingDirectory
@@ -82,8 +81,7 @@ case "focus", "open-files", "review", "open-artifact":
 
 case "rename":
     guard arguments.count >= 3 else { exitWithError(usage) }
-    let status = StatusBuilder.build(config: config)
-    guard let session = findSession(arguments[1], in: status) else { exitWithError("no single session matches '\(arguments[1])'") }
+    guard let session = findSession(arguments[1], in: StatusBuilder.buildSessions(config: config)) else { exitWithError("no single session matches '\(arguments[1])'") }
     let newName = arguments.dropFirst(2).joined(separator: " ").replacingOccurrences(of: "\n", with: " ")
     if let failure = SessionRenamer.rename(session, to: newName) {
         exitWithError("cannot rename '\(session.name ?? session.sessionId)' (\(session.cloneName ?? "no clone")): \(failure)")
@@ -94,7 +92,7 @@ case "focus-unity":
     let query = arguments.dropFirst().joined(separator: " ")
     let status = StatusBuilder.build(config: config)
     let clone = status.clones.first { $0.name.caseInsensitiveCompare(query) == .orderedSame }
-    guard let unityPid = clone?.unityPid ?? findSession(query, in: status)?.unityPid else { exitWithError("no open Unity editor for '\(query)'") }
+    guard let unityPid = clone?.unityPid ?? findSession(query, in: status.sessions)?.unityPid else { exitWithError("no open Unity editor for '\(query)'") }
     guard UnityEditorActivator.activate(pid: unityPid) else { exitWithError("could not activate Unity editor pid \(unityPid)") }
 
 default:

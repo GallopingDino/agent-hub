@@ -8,17 +8,30 @@ enum StatusBuilder {
         let clonePaths = config.findClonePaths()
         let processTable = ProcessTable()
         let tabs = AgentTabsClient.listTabs()
+        let sessions = buildSessions(clonePaths: clonePaths, processTable: processTable, tabs: tabs ?? [], config: config)
+        let clones = buildClones(clonePaths, sessions: sessions, processTable: processTable)
+        return HubStatus(generatedAt: Date(), isAgentTabsAvailable: tabs != nil, sessions: sessions, clones: clones)
+    }
+
+    // Skips the per-clone git checks, which take most of the time of build().
+    static func buildSessions(config: HubConfig) -> [AgentSession] {
+        buildSessions(clonePaths: config.findClonePaths(), processTable: ProcessTable(), tabs: AgentTabsClient.listTabs() ?? [], config: config)
+    }
+
+    private static func buildSessions(clonePaths: [String], processTable: ProcessTable, tabs: [RiderTerminalTab], config: HubConfig) -> [AgentSession] {
         let records = ClaudeSessionReader.readLiveSessions()
 
         var artifactCache = ArtifactLinkCache()
         let artifactUrls = records.map { artifactCache.findLatestArtifactUrl(of: $0) }
         artifactCache.save()
 
-        let sessions = parallelMap(Array(zip(records, artifactUrls))) { record, artifactUrl in
-            buildSession(record, artifactUrl: artifactUrl, clonePaths: clonePaths, tabs: tabs ?? [], processTable: processTable, config: config)
+        return parallelMap(Array(zip(records, artifactUrls))) { record, artifactUrl in
+            buildSession(record, artifactUrl: artifactUrl, clonePaths: clonePaths, tabs: tabs, processTable: processTable, config: config)
         }
         .sorted { ($0.state.sortOrder, $0.idleSeconds) < ($1.state.sortOrder, $1.idleSeconds) }
+    }
 
+    private static func buildClones(_ clonePaths: [String], sessions: [AgentSession], processTable: ProcessTable) -> [CloneState] {
         let riderProjects = RiderRecentProjects.readOpenProjectPaths()
         var worktreeCache = WorktreeChangesCache()
         let clones = clonePaths.map { path in
@@ -39,8 +52,7 @@ enum StatusBuilder {
             )
         }
         worktreeCache.save()
-
-        return HubStatus(generatedAt: Date(), isAgentTabsAvailable: tabs != nil, sessions: sessions, clones: clones)
+        return clones
     }
 
     private static func buildSession(_ record: ClaudeSessionRecord, artifactUrl: String?, clonePaths: [String], tabs: [RiderTerminalTab], processTable: ProcessTable, config: HubConfig) -> AgentSession {
