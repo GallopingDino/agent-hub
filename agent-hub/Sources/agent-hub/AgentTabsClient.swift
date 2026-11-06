@@ -37,7 +37,13 @@ enum AgentTabsClient {
         guard let data = request(action, query) else {
             return AgentTabsReply(ok: false, error: "Agent Tabs plugin is not reachable; is Rider running with the plugin installed?")
         }
-        return (try? JSONDecoder().decode(AgentTabsReply.self, from: data)) ?? AgentTabsReply(ok: false, error: "unexpected reply from Agent Tabs")
+        guard let reply = try? JSONDecoder().decode(AgentTabsReply.self, from: data) else {
+            return AgentTabsReply(ok: false, error: "unexpected reply from Agent Tabs")
+        }
+        if reply.error?.hasPrefix("unknown action") == true {
+            return AgentTabsReply(ok: false, error: "the Agent Tabs plugin in Rider is outdated and has no '\(action)'; install rider-plugin/out/agent-tabs.jar from disk")
+        }
+        return reply
     }
 
     private static func request(_ action: String, _ query: [URLQueryItem]) -> Data? {

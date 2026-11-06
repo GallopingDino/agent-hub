@@ -246,6 +246,8 @@ private struct NoticeBanner: View {
     var body: some View {
         Label(text, systemImage: isWarning ? "exclamationmark.triangle.fill" : "exclamationmark.circle.fill")
             .font(.system(size: 11))
+            .fixedSize(horizontal: false, vertical: true)
+            .textSelection(.enabled)
             .foregroundStyle(isWarning ? Color.orange : Color.secondary)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
