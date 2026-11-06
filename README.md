@@ -1,12 +1,12 @@
 # Agent Hub
 
-A macOS menu bar panel for running many Claude Code agents across many projects, with JetBrains Rider and Unity as the editors.
+A macOS menu bar panel for running multiple AI agents across many projects, with JetBrains Rider as an IDE and optional Unity Editor integration.
 
 <img src="docs/panel.png" width="480" alt="Agent Hub panel">
 
 ## Why
 
-Agentic development environments (ADEs) are good at running agents but weak at reading and navigating code compared to a full IDE like Rider. JetBrains Air brings agents into the JetBrains world but does not handle a multi-project setup. Agent Hub adds the missing agent features to Rider instead: one panel shows every agent in every project, tells you which ones need you, and jumps to the right place.
+ADEs are good at running agents but weak at navigating the code compared to a full IDE like Rider. JetBrains Air brings agents into the IDE, but does not handle a multi-project setup. Agent Hub adds the missing agent monitor features to Rider instead: one panel shows every agent in every project, tells you which ones are waiting for input, and jumps to the right place.
 
 Nothing in it is tied to Rider. The panel talks to a small CLI, and the CLI talks to editors over local HTTP, so any IDE or tool can be plugged in the same way.
 
