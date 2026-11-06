@@ -17,6 +17,7 @@ final class StatusItemController: NSObject {
     private var subscriptions: Set<AnyCancellable> = []
     private var outsideClickMonitor: Any?
     private var escapeHotKey: GlobalHotKey?
+    private var refreshHotKey: GlobalHotKey?
     private var panelTop: CGFloat = 0
 
     init(model: PanelModel) {
@@ -99,9 +100,15 @@ final class StatusItemController: NSObject {
         NSApp.activate()
         panel.makeKeyAndOrderFront(nil)
         statusItem.button?.highlight(true)
-        // The panel cannot take keyboard focus from the active app, so Esc is grabbed only while the panel is shown.
+        // The panel cannot take keyboard focus from the active app, so its keys are grabbed only while it is shown.
         escapeHotKey = GlobalHotKey(keyCode: kVK_Escape, modifiers: 0) {
             DispatchQueue.main.async { [weak self] in self?.hidePanel() }
+        }
+        refreshHotKey = GlobalHotKey(keyCode: kVK_ANSI_R, modifiers: controlKey) {
+            DispatchQueue.main.async { [weak self] in
+                guard let model = self?.model else { return }
+                Task { await model.refresh() }
+            }
         }
         outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             Task { @MainActor in self?.hidePanel() }
@@ -114,6 +121,7 @@ final class StatusItemController: NSObject {
         statusItem.button?.highlight(false)
         model.panelDidClose()
         escapeHotKey = nil
+        refreshHotKey = nil
         if let outsideClickMonitor {
             NSEvent.removeMonitor(outsideClickMonitor)
         }
