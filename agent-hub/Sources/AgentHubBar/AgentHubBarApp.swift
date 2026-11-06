@@ -1,20 +1,14 @@
-import SwiftUI
+import AppKit
 
 @main
-struct AgentHubBarApp: App {
-    @StateObject private var model = PanelModel()
+@MainActor
+enum AgentHubBarApp {
+    private static var controller: StatusItemController?
 
-    var body: some Scene {
-        MenuBarExtra {
-            PanelView(model: model)
-        } label: {
-            HStack(spacing: 3) {
-                Image(nsImage: MenuBarIcon.make(hasAttention: model.attentionCount > 0))
-                if model.attentionCount > 0 {
-                    Text("\(model.attentionCount)").monospacedDigit()
-                }
-            }
-        }
-        .menuBarExtraStyle(.window)
+    static func main() {
+        let application = NSApplication.shared
+        application.setActivationPolicy(.accessory)
+        controller = StatusItemController(model: PanelModel())
+        application.run()
     }
 }

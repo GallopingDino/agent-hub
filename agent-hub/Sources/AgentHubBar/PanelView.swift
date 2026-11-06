@@ -33,8 +33,6 @@ struct PanelView: View {
         .frame(width: 480)
         .focusEffectDisabled()
         .animation(.easeOut(duration: 0.2), value: model.notice)
-        .onAppear { model.panelDidOpen() }
-        .onDisappear { model.panelDidClose() }
     }
 
     private var freeClones: [PanelClone] {
