@@ -84,10 +84,10 @@ case "rename":
     guard arguments.count >= 3 else { exitWithError(usage) }
     let status = StatusBuilder.build(config: config)
     guard let session = findSession(arguments[1], in: status) else { exitWithError("no single session matches '\(arguments[1])'") }
-    // Typed text would land in a busy agent's conversation or answer its pending question.
-    guard session.state != .working && session.state != .waiting else { exitWithError("session '\(session.name ?? session.sessionId)' is busy; rename it when it is idle") }
     let newName = arguments.dropFirst(2).joined(separator: " ").replacingOccurrences(of: "\n", with: " ")
-    report(AgentTabsClient.sendText("/rename " + newName, toProcess: session.pid))
+    if let failure = SessionRenamer.rename(session, to: newName) {
+        exitWithError("cannot rename '\(session.name ?? session.sessionId)' (\(session.cloneName ?? "no clone")): \(failure)")
+    }
 
 case "focus-unity":
     guard arguments.count >= 2 else { exitWithError(usage) }

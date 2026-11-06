@@ -29,8 +29,8 @@ enum AgentTabsClient {
         send("open-files", [URLQueryItem(name: "project", value: project)] + paths.map { URLQueryItem(name: "path", value: $0) })
     }
 
-    static func sendText(_ text: String, toProcess pid: Int32) -> AgentTabsReply {
-        send("send-text", [URLQueryItem(name: "pid", value: String(pid)), URLQueryItem(name: "text", value: text)])
+    static func sendText(_ text: String, toProcess pid: Int32, isPressingEnter: Bool) -> AgentTabsReply {
+        send("send-text", [URLQueryItem(name: "pid", value: String(pid)), URLQueryItem(name: "text", value: text), URLQueryItem(name: "execute", value: isPressingEnter ? "true" : "false")])
     }
 
     private static func send(_ action: String, _ query: [URLQueryItem]) -> AgentTabsReply {

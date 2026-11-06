@@ -10,7 +10,7 @@ enum HubClient {
     }
 
     static func fetchStatus() async -> PanelStatus? {
-        guard let output = await run(["status", "--json"]) else { return nil }
+        guard let output = await run(["status", "--json"]).output else { return nil }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         do {
@@ -23,18 +23,22 @@ enum HubClient {
     }
 
     static func showAgent(_ session: PanelSession, isOpeningEditedFiles: Bool) async {
-        _ = await run([isOpeningEditedFiles ? "review" : "focus", String(session.pid)])
+        _ = await run([isOpeningEditedFiles ? "review" : "focus", String(session.pid)]).output
     }
 
-    static func rename(_ session: PanelSession, to newName: String) async -> Bool {
-        await run(["rename", String(session.pid), newName]) != nil
+    // Returns nil on success, otherwise the reason agent-hub gave.
+    static func rename(_ session: PanelSession, to newName: String) async -> String? {
+        let result = await run(["rename", String(session.pid), newName])
+        guard result.output == nil else { return nil }
+        let reason = result.errorText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return reason.isEmpty ? "cannot rename '\(session.title)': agent-hub failed" : reason
     }
 
     static func openArtifact(_ session: PanelSession) async {
-        _ = await run(["open-artifact", String(session.pid)])
+        _ = await run(["open-artifact", String(session.pid)]).output
     }
 
-    private static func run(_ arguments: [String]) async -> Data? {
+    private static func run(_ arguments: [String]) async -> (output: Data?, errorText: String) {
         await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
                 let process = Process()
@@ -51,7 +55,7 @@ enum HubClient {
                 }
                 catch {
                     HubLog.write("cannot start \(executable.path): \(error)")
-                    continuation.resume(returning: nil)
+                    continuation.resume(returning: (nil, "cannot start agent-hub: \(error.localizedDescription)"))
                     return
                 }
 
@@ -61,7 +65,7 @@ enum HubClient {
                 if process.terminationStatus != 0 || errorText.isEmpty == false {
                     HubLog.write("agent-hub \(arguments.joined(separator: " ")) exited with \(process.terminationStatus): \(errorText)")
                 }
-                continuation.resume(returning: process.terminationStatus == 0 ? data : nil)
+                continuation.resume(returning: (process.terminationStatus == 0 ? data : nil, errorText))
             }
         }
     }

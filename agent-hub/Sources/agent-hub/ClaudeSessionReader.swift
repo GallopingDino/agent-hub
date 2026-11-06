@@ -33,6 +33,12 @@ enum ClaudeSessionReader {
             .filter { isProcessAlive($0.pid) }
     }
 
+    static func readName(ofProcess pid: Int32) -> String? {
+        let file = claudeDirectory.appendingPathComponent("sessions/\(pid).json")
+        guard let data = try? Data(contentsOf: file) else { return nil }
+        return (try? JSONDecoder().decode(ClaudeSessionRecord.self, from: data))?.name
+    }
+
     static func findTranscript(of session: ClaudeSessionRecord) -> URL {
         let escapedDirectory = session.cwd.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ".", with: "-")
         return claudeDirectory

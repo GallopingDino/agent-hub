@@ -195,9 +195,12 @@ private struct PanelHeader: View {
             Button {
                 Task { await model.refresh() }
             } label: {
-                Image(systemName: "arrow.clockwise")
-                    .rotationEffect(.degrees(model.isRefreshing ? 360 : 0))
-                    .animation(model.isRefreshing ? .linear(duration: 0.8).repeatForever(autoreverses: false) : .default, value: model.isRefreshing)
+                if model.isRefreshing {
+                    ProgressView().controlSize(.small).scaleEffect(0.7)
+                }
+                else {
+                    Image(systemName: "arrow.clockwise")
+                }
             }
             .buttonStyle(GlassIconButtonStyle(diameter: 28))
             .disabled(model.isRefreshing)
@@ -251,7 +254,7 @@ private struct NoticeBanner: View {
     var isWarning = false
 
     var body: some View {
-        Label(text, systemImage: isWarning ? "exclamationmark.triangle.fill" : "info.circle.fill")
+        Label(text, systemImage: isWarning ? "exclamationmark.triangle.fill" : "exclamationmark.circle.fill")
             .font(.system(size: 11))
             .foregroundStyle(isWarning ? Color.orange : Color.secondary)
             .padding(.horizontal, 12)
@@ -462,6 +465,9 @@ private struct SessionRow: View {
 
     private var actions: some View {
         HStack(spacing: 4) {
+            Button { model.showAgent(session) } label: { Image(systemName: "terminal") }
+                .disabled(session.hasTerminalTab == false)
+                .help(focusHelp)
             if let unityPid = session.unityPid {
                 Button { model.showUnityEditor(pid: unityPid) } label: { Image(systemName: "cube") }
                     .help("Show the \(session.projectName) Unity editor")
@@ -470,10 +476,8 @@ private struct SessionRow: View {
                 Button { model.openArtifact(session) } label: { Image(systemName: "globe") }
                     .help("Open the page this agent published")
             }
-            Button { model.showAgent(session) } label: { Image(systemName: "terminal") }
-                .disabled(session.hasTerminalTab == false)
-                .help(focusHelp)
         }
+        .frame(width: 26 * 3 + 4 * 2, alignment: .leading)
         .buttonStyle(GlassIconButtonStyle(diameter: 26))
         .opacity(isHovered || session.isNeedingUser ? 1 : 0.5)
     }

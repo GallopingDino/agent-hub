@@ -111,35 +111,27 @@ final class PanelModel: ObservableObject {
     }
 
     private func applyTaskName(_ name: String, to sessions: [PanelSession], replacingGroupId: String) {
-        let renameable = sessions.filter(\.isRenameable)
-        let skipped = sessions.count - renameable.count
         replaceSavedGroupId(replacingGroupId, with: name.lowercased())
 
         Task {
-            var failed = 0
-            for session in renameable {
-                if await HubClient.rename(session, to: name) == false {
-                    failed += 1
+            var failures: [String] = []
+            for session in sessions {
+                if let reason = await HubClient.rename(session, to: name) {
+                    failures.append(reason)
                 }
             }
-            showNotice(makeRenameNotice(renamed: renameable.count - failed, skipped: skipped, failed: failed))
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            if failures.isEmpty == false {
+                showNotice(failures.joined(separator: "\n"))
+            }
             await refresh()
         }
-    }
-
-    private func makeRenameNotice(renamed: Int, skipped: Int, failed: Int) -> String? {
-        var parts: [String] = []
-        if skipped > 0 { parts.append("\(skipped) busy agent\(skipped == 1 ? "" : "s") left as is, rename when idle") }
-        if failed > 0 { parts.append("\(failed) rename\(failed == 1 ? "" : "s") failed") }
-        return parts.isEmpty ? nil : "Renamed \(renamed). " + parts.joined(separator: "; ")
     }
 
     private func showNotice(_ text: String?) {
         guard let text else { return }
         notice = text
         Task {
-            try? await Task.sleep(nanoseconds: 6_000_000_000)
+            try? await Task.sleep(nanoseconds: 12_000_000_000)
             if notice == text {
                 notice = nil
             }

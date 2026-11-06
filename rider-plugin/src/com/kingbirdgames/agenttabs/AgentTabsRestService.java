@@ -10,6 +10,7 @@ import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.QueryStringDecoder;
 import org.jetbrains.ide.RestService;
+import org.jetbrains.plugins.terminal.view.TerminalSendTextBuilder;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -109,14 +110,17 @@ public final class AgentTabsRestService extends RestService {
     private static String sendText(QueryStringDecoder urlDecoder) {
         String pid = findParameter(urlDecoder, "pid");
         String text = findParameter(urlDecoder, "text");
-        if (pid == null || text == null || text.isBlank())
+        if (pid == null || text == null || text.isEmpty())
             return error("parameters 'pid' and 'text' are required");
 
         TerminalTabsUtils.TabLocation location = TerminalTabsUtils.findTabOwningProcess(Long.parseLong(pid));
         if (location == null)
             return error("no terminal tab found for pid=" + pid);
 
-        location.tab().getView().createSendTextBuilder().shouldExecute().send(text);
+        TerminalSendTextBuilder builder = location.tab().getView().createSendTextBuilder();
+        if ("false".equals(findParameter(urlDecoder, "execute")) == false)
+            builder = builder.shouldExecute();
+        builder.send(text);
         return describe(location);
     }
 
