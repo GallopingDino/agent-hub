@@ -14,7 +14,7 @@ enum StatusTableRenderer {
             lines.append("\(state) \(clone) \(name) \(idle) \(files)\(tab)")
         }
 
-        let unity = status.clones.filter(\.isUnityOpen).map(\.name)
+        let unity = status.clones.filter { $0.unityPid != nil }.map(\.name)
         let free = status.clones.filter(\.isFree).map(\.name)
         lines.append("")
         lines.append("UNITY    " + unity.joined(separator: "  "))

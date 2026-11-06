@@ -9,6 +9,7 @@ usage:
   agent-hub open-files <session>  open the agent's still-changed code files in Rider (no prefabs/scenes/assets)
   agent-hub review <session>      open-files, then focus
   agent-hub open-artifact <session>  open the last artifact the agent published
+  agent-hub focus-unity <session|clone>  bring the clone's Unity editor to the front
 
 <session> is a session name, a session id prefix or a pid.
 """
@@ -77,6 +78,14 @@ case "focus", "open-files", "review", "open-artifact":
         guard let artifactUrl = session.artifactUrl else { exitWithError("session '\(session.name ?? session.sessionId)' has not published an artifact") }
         _ = ShellCommand.run("/usr/bin/open", [artifactUrl])
     }
+
+case "focus-unity":
+    guard arguments.count >= 2 else { exitWithError(usage) }
+    let query = arguments.dropFirst().joined(separator: " ")
+    let status = StatusBuilder.build(config: config)
+    let clone = status.clones.first { $0.name.caseInsensitiveCompare(query) == .orderedSame }
+    guard let unityPid = clone?.unityPid ?? findSession(query, in: status)?.unityPid else { exitWithError("no open Unity editor for '\(query)'") }
+    guard UnityEditorActivator.activate(pid: unityPid) else { exitWithError("could not activate Unity editor pid \(unityPid)") }
 
 default:
     print(usage)

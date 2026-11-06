@@ -3,11 +3,11 @@ import Foundation
 struct ProcessTable {
     private let parentByPid: [Int32: Int32]
 
-    let unityProjectPaths: Set<String>
+    let unityEditorPidByProject: [String: Int32]
 
     init() {
         var parents: [Int32: Int32] = [:]
-        var unityProjects: Set<String> = []
+        var unityEditors: [String: Int32] = [:]
         let projectPathPattern = try! NSRegularExpression(pattern: "-projectpath\\s+(\\S+)", options: .caseInsensitive)
 
         let output = ShellCommand.run("/bin/ps", ["-axo", "pid=,ppid=,command="]) ?? ""
@@ -18,14 +18,16 @@ struct ProcessTable {
 
             guard parts.count == 3, parts[2].contains("Unity.app/Contents/MacOS/Unity") else { continue }
             let command = String(parts[2])
+            if command.localizedCaseInsensitiveContains("-batchmode") { continue }
+
             let range = NSRange(command.startIndex..., in: command)
             if let match = projectPathPattern.firstMatch(in: command, range: range), let pathRange = Range(match.range(at: 1), in: command) {
-                unityProjects.insert(Self.normalize(String(command[pathRange])))
+                unityEditors[Self.normalize(String(command[pathRange]))] = pid
             }
         }
 
         parentByPid = parents
-        unityProjectPaths = unityProjects
+        unityEditorPidByProject = unityEditors
     }
 
     func isDescendant(_ pid: Int32, of ancestor: Int32) -> Bool {

@@ -33,6 +33,7 @@ struct AgentSession: Codable {
     let artifactUrl: String?
     let riderProject: String?
     let hasTerminalTab: Bool
+    let unityPid: Int32?
 }
 
 struct CloneState: Codable {
@@ -41,7 +42,7 @@ struct CloneState: Codable {
     let branch: String?
     let stagedCount: Int
     let changedCount: Int?
-    let isUnityOpen: Bool
+    let unityPid: Int32?
     let sessionCount: Int
     let isFree: Bool
 }

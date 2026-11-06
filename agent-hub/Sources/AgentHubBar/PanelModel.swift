@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import SwiftUI
 
 @MainActor
@@ -15,7 +15,7 @@ final class PanelModel: ObservableObject {
     private var refreshLoop: Task<Void, Never>?
 
     var attentionCount: Int {
-        status?.sessions.filter { $0.state == "waiting" || $0.state == "review" }.count ?? 0
+        status?.sessions.filter(\.isNeedingUser).count ?? 0
     }
 
     init() {
@@ -48,6 +48,17 @@ final class PanelModel: ObservableObject {
 
     func openArtifact(_ session: PanelSession) {
         Task { await HubClient.openArtifact(session) }
+    }
+
+    func showUnityEditor(pid: Int32) {
+        guard let editor = NSRunningApplication(processIdentifier: pid) else { return }
+        if #available(macOS 14, *) {
+            NSApp.yieldActivation(to: editor)
+            editor.activate()
+        }
+        else {
+            editor.activate(options: [.activateIgnoringOtherApps])
+        }
     }
 
     private func startRefreshLoop() {

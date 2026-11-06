@@ -31,7 +31,7 @@ enum StatusBuilder {
                 branch: GitInspector.readBranch(of: path),
                 stagedCount: stagedCount,
                 changedCount: changedCount,
-                isUnityOpen: processTable.unityProjectPaths.contains(path),
+                unityPid: processTable.unityEditorPidByProject[path],
                 sessionCount: sessionCount,
                 isFree: isFreeCandidate && changedCount == 0
             )
@@ -65,7 +65,8 @@ enum StatusBuilder {
             reviewFiles: reviewFiles,
             artifactUrl: artifactUrl,
             riderProject: tab?.project,
-            hasTerminalTab: tab != nil
+            hasTerminalTab: tab != nil,
+            unityPid: clonePath.flatMap { processTable.unityEditorPidByProject[$0] }
         )
     }
 
@@ -120,7 +121,10 @@ enum StatusBuilder {
             .split(separator: "\n")
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .first { $0.isEmpty == false } ?? ""
-        let plain = firstLine.replacingOccurrences(of: "**", with: "").replacingOccurrences(of: "`", with: "")
+        let plain = firstLine
+            .replacingOccurrences(of: "**", with: "")
+            .replacingOccurrences(of: "`", with: "")
+            .trimmingCharacters(in: CharacterSet(charactersIn: "#>-• ").union(.whitespaces))
         return plain.count > previewLength ? String(plain.prefix(previewLength)) + "…" : plain
     }
 

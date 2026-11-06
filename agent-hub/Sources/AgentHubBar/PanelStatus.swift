@@ -21,16 +21,21 @@ struct PanelSession: Decodable, Identifiable {
     let reviewFiles: [String]
     let artifactUrl: String?
     let hasTerminalTab: Bool
+    let unityPid: Int32?
 
     var id: String { sessionId }
 
     var title: String { name ?? String(sessionId.prefix(8)) }
 
     var projectName: String { cloneName ?? (workingDirectory as NSString).lastPathComponent }
+
+    var isNeedingUser: Bool { state == "waiting" || state == "review" }
 }
 
-struct PanelClone: Decodable {
+struct PanelClone: Decodable, Identifiable {
     let name: String
-    let isUnityOpen: Bool
+    let unityPid: Int32?
     let isFree: Bool
+
+    var id: String { name }
 }
