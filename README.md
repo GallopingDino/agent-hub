@@ -1,6 +1,6 @@
 # Agent Hub
 
-A macOS menu bar panel for running multiple AI agents across many projects, with JetBrains Rider as an IDE and optional Unity Editor integration.
+A macOS menu bar panel for running Claude Code and Codex agents across many projects. The agent monitor works next to any IDE; JetBrains Rider is the one integrated today. Optional integrations: Unity Editor, task trackers such as Asana, Claude artifacts and the Handy speech-to-text app.
 
 <img src="docs/panel.png" width="480" alt="Agent Hub panel">
 
@@ -17,15 +17,18 @@ Nothing in it is tied to Rider. The panel talks to a small CLI, and the CLI talk
 - Brings the Unity Editor of that project to the front, so switching projects switches both editors.
 - Reopening a project in Rider resumes the Claude Code and Codex sessions it had in its terminal tabs.
 - Reopens a closed project from the IDE's recent list; hold Option to open its Unity Editor too.
-- Shows how much of the 5-hour and weekly limits Claude Code and Codex have left, and wakes sleeping agents with one short request outside any project.
-- Renames sessions, groups them by task or project, opens the last artifact an agent published.
-- Click a session or move with the arrow keys to expand its last answer; Return then opens its terminal tab, Control-X closes it, and for the last agent of a project offers to close the Rider window and Unity Editor too.
+- Closes the Rider windows and Unity Editors of projects that no agent works in any more.
+- Shows how much of the 5-hour and weekly limits Claude Code and Codex have left, flags a limit past 80%, spends a Codex usage reset, and wakes sleeping agents with one short request outside any project.
+- Opens the tracker task an agent works on. Agents report their task codes and links through the `agent-hub-report-task` skill; the link pattern for a bare code is set in the settings menu.
+- Renames sessions, groups them by task or project, opens the last artifact an agent published. In task mode, drop one task on another to merge them; Split in the task's context menu undoes it.
+- Notices when the Handy speech-to-text app freezes and restarts it.
+- Click a session or move with the arrow keys to expand its last answer. Left and Right pick one of its buttons and Return presses it; Command-Down opens the terminal tab, Option-Tab renames, Control-X closes the agent, and for the last agent of a project offers to close the Rider window and Unity Editor too.
 - Global hot key Control-Option-Command-H; while the panel is open, R refreshes, S opens settings, Esc closes.
 
 ## Parts
 
 - `agent-hub/` — the `agent-hub` CLI (`agent-hub status`, `focus`, `review`, `rename`, …) and the menu bar app, in Swift.
-- `rider-plugin/` — Agent Tabs, a Rider plugin that exposes terminal tabs and file opening at `http://127.0.0.1:63342/api/agent-tabs/`.
+- `rider-plugin/` — Agent Tabs, a plugin that exposes terminal tabs and file opening at `http://127.0.0.1:63342/api/agent-tabs/`. It uses only IntelliJ Platform APIs, so it should also load in other JetBrains IDEs 2026.2+, but only Rider is tested; finding, reopening and closing projects is Rider-only for now.
 
 ## Install
 
