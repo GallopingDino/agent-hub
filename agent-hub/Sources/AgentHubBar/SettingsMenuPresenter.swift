@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 
 // A native NSMenu keeps the trigger button styled like the other glass buttons; SwiftUI's Menu draws its own bezel.
 @MainActor
@@ -20,6 +21,8 @@ final class SettingsMenuPresenter: NSObject {
     func show(at point: NSPoint?) {
         let menu = NSMenu()
         addUsageItems(to: menu)
+        addWakeUpItems(to: menu)
+        addCloseUnusedItems(to: menu)
         menu.addItem(.separator())
         menu.addItem(makeOpenProjectItem())
         menu.addItem(.separator())
@@ -53,12 +56,6 @@ final class SettingsMenuPresenter: NSObject {
     }
 
     private func addUsageItems(to menu: NSMenu) {
-        if model.isAnyAgentAsleep {
-            let wakeUp = makeItem("Wake Up Agents", #selector(wakeUpAgents))
-            wakeUp.isEnabled = model.isWakingUpAgents == false
-            menu.addItem(wakeUp)
-        }
-        addCloseUnusedItems(to: menu)
         if model.usage.isEmpty {
             menu.addItem(makeInfoItem("Usage is loading…"))
         }
@@ -68,14 +65,41 @@ final class SettingsMenuPresenter: NSObject {
         }
     }
 
+    private func addWakeUpItems(to menu: NSMenu) {
+        guard model.isAnyAgentAsleep else { return }
+        menu.addItem(.separator())
+        let wakeUp = makeItem("Wake Up Agents", #selector(wakeUpAgents))
+        wakeUp.isEnabled = model.isWakingUpAgents == false
+        wakeUp.image = NSImage(systemSymbolName: "alarm", accessibilityDescription: nil)
+        menu.addItem(wakeUp)
+    }
+
     private func addCloseUnusedItems(to menu: NSMenu) {
         let clones = model.unusedClones
+        guard clones.isEmpty == false else { return }
+        menu.addItem(.separator())
+        var items: [NSMenuItem] = []
         if clones.count > 1 {
-            menu.addItem(makeCloseUnusedItem("Close All Unused", closing: clones))
+            items.append(makeCloseUnusedItem("Close All Unused", closing: clones))
         }
         for clone in clones {
-            menu.addItem(makeCloseUnusedItem("Close Unused: \(clone.name)", closing: [clone]))
+            items.append(makeCloseUnusedItem("Close Unused: \(clone.name)", closing: [clone]))
         }
+        items.first?.image = makeBroomImage()
+        items.forEach(menu.addItem)
+    }
+
+    private func makeBroomImage() -> NSImage? {
+        let broom = BroomShape()
+            .stroke(style: StrokeStyle(lineWidth: 1.3, lineCap: .round, lineJoin: .round))
+            .frame(width: 10, height: 13)
+            .rotationEffect(.degrees(35))
+            .frame(width: 16, height: 16)
+        let renderer = ImageRenderer(content: broom)
+        renderer.scale = NSScreen.main?.backingScaleFactor ?? 2
+        let image = renderer.nsImage
+        image?.isTemplate = true
+        return image
     }
 
     private func makeCloseUnusedItem(_ title: String, closing clones: [PanelClone]) -> NSMenuItem {

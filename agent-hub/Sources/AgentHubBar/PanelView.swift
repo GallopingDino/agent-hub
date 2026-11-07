@@ -242,7 +242,7 @@ private struct SettingsMenu: View {
 }
 
 // A handle over a bound bundle of bristles, drawn upright; SF Symbols has no broom.
-private struct BroomShape: Shape {
+struct BroomShape: Shape {
     func path(in rect: CGRect) -> Path {
         let width = rect.width
         let height = rect.height
