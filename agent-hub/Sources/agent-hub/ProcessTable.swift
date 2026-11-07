@@ -11,36 +11,45 @@ struct ProcessTable {
     private let parentByPid: [Int32: Int32]
 
     let unityEditorPidByProject: [String: Int32]
+    // A process left behind by a closed terminal keeps running with no controlling terminal.
+    let pidsWithoutTerminal: Set<Int32>
     let codexArgumentsByPid: [Int32: [String]]
 
     init() {
         var parents: [Int32: Int32] = [:]
         var unityEditors: [String: Int32] = [:]
         var codexSessions: [Int32: [String]] = [:]
+        var withoutTerminal: Set<Int32> = []
         let projectPathPattern = try! NSRegularExpression(pattern: "-projectpath\\s+(\\S+)", options: .caseInsensitive)
 
-        let output = ShellCommand.run("/bin/ps", ["-axo", "pid=,ppid=,command="]) ?? ""
+        let output = ShellCommand.run("/bin/ps", ["-axo", "pid=,ppid=,tty=,command="]) ?? ""
         for line in output.split(separator: "\n") {
-            let parts = line.split(separator: " ", maxSplits: 2, omittingEmptySubsequences: true)
-            guard parts.count >= 2, let pid = Int32(parts[0]), let parentPid = Int32(parts[1]) else { continue }
+            let fields = line.split(separator: " ", maxSplits: 3, omittingEmptySubsequences: true)
+            guard fields.count >= 3, let pid = Int32(fields[0]), let parentPid = Int32(fields[1]) else { continue }
             parents[pid] = parentPid
+            if fields[2] == "??" {
+                withoutTerminal.insert(pid)
+            }
+            guard fields.count == 4 else { continue }
+            let command = fields[3]
 
-            if parts.count == 3, let arguments = Self.parseCodexSessionArguments(parts[2]) {
+            if let arguments = Self.parseCodexSessionArguments(command) {
                 codexSessions[pid] = arguments
             }
 
-            guard parts.count == 3, parts[2].contains("Unity.app/Contents/MacOS/Unity") else { continue }
-            let command = String(parts[2])
-            if command.localizedCaseInsensitiveContains("-batchmode") { continue }
+            guard command.contains("Unity.app/Contents/MacOS/Unity") else { continue }
+            let unityCommand = String(command)
+            if unityCommand.localizedCaseInsensitiveContains("-batchmode") { continue }
 
-            let range = NSRange(command.startIndex..., in: command)
-            if let match = projectPathPattern.firstMatch(in: command, range: range), let pathRange = Range(match.range(at: 1), in: command) {
-                unityEditors[Self.normalize(String(command[pathRange]))] = pid
+            let range = NSRange(unityCommand.startIndex..., in: unityCommand)
+            if let match = projectPathPattern.firstMatch(in: unityCommand, range: range), let pathRange = Range(match.range(at: 1), in: unityCommand) {
+                unityEditors[Self.normalize(String(unityCommand[pathRange]))] = pid
             }
         }
 
         parentByPid = parents
         unityEditorPidByProject = unityEditors
+        pidsWithoutTerminal = withoutTerminal
         codexArgumentsByPid = codexSessions
     }
 

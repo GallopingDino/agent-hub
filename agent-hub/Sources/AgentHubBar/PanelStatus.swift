@@ -25,7 +25,8 @@ struct PanelSession: Decodable, Identifiable {
     let hasTerminalTab: Bool
     let unityPid: Int32?
 
-    var id: String { sessionId }
+    // A resumed session can briefly run in two processes at once, so the process tells rows apart.
+    var id: String { String(pid) }
 
     var title: String { name ?? String(sessionId.prefix(8)) }
 

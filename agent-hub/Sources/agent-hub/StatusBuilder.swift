@@ -137,7 +137,8 @@ enum StatusBuilder {
         let clonePath = findClone(containing: workingDirectory, clonePaths: clonePaths)
         let reviewFiles = collectStillChangedFiles(observed.lastMessage?.reportedFiles ?? [], baseDirectory: clonePath ?? workingDirectory)
         let tab = tabs.first { tab in tab.shellPid.map { processTable.isDescendant(observed.pid, of: $0) } ?? false }
-        let state = classify(status: observed.status, idleSeconds: observed.idleSeconds, hasReviewFiles: reviewFiles.isEmpty == false, config: config)
+        let isOrphaned = processTable.pidsWithoutTerminal.contains(observed.pid)
+        let state = isOrphaned ? .stale : classify(status: observed.status, idleSeconds: observed.idleSeconds, hasReviewFiles: reviewFiles.isEmpty == false, config: config)
 
         return AgentSession(
             sessionId: observed.sessionId,
