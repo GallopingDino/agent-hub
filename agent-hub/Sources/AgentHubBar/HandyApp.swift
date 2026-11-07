@@ -6,7 +6,7 @@ enum HandyApp {
     private static let startCalledMarker = "TranscribeAction::start called"
     private static let startCompletedMarker = "TranscribeAction::start completed"
     // A healthy start takes well under a second.
-    private static let hangSeconds: TimeInterval = 10
+    private static let hangSeconds: TimeInterval = 5
     private static let logTailBytes = 256 * 1024
     private static let exitWaitSeconds: TimeInterval = 3
 
