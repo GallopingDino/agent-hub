@@ -76,8 +76,8 @@ final class PanelModel: ObservableObject {
         status?.clones.filter { $0.isRunning && $0.isFree } ?? []
     }
 
-    var isAnyAgentRunningLow: Bool {
-        usage.contains(where: \.isRunningLow)
+    var isAnyAgentNearLimit: Bool {
+        usage.contains(where: \.isNearLimit)
     }
 
     var selectedSession: PanelSession? {

@@ -233,7 +233,7 @@ final class StatusItemController: NSObject {
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 // Not from inside this main-queue block: the menu's own loop would hold the queue.
-                RunLoop.main.perform { self.model.showSettingsMenu(at: self.findSettingsMenuPoint()) }
+                RunLoop.main.perform { MainActor.assumeIsolated { self.model.showSettingsMenu(at: self.findSettingsMenuPoint()) } }
             }
         }
 

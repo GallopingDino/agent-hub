@@ -59,13 +59,21 @@ final class SettingsMenuPresenter: NSObject {
         if model.usage.isEmpty {
             menu.addItem(makeInfoItem("Usage is loading…"))
         }
-        for agentUsage in model.usage {
-            menu.addItem(makeHeader(agentUsage.agentName))
-            menu.addItem(makeInfoItem(agentUsage.summary))
+        else {
+            menu.addItem(makeUsageItem())
         }
     }
 
     // Offered whenever Handy runs, since a hang the log does not show is possible too; flagged when one is seen.
+    // A view item carries no action, so the arrow keys pass over it.
+    private func makeUsageItem() -> NSMenuItem {
+        let item = NSMenuItem()
+        let hosting = NSHostingView(rootView: UsageMenuView(usage: model.usage))
+        hosting.frame = NSRect(origin: .zero, size: hosting.fittingSize)
+        item.view = hosting
+        return item
+    }
+
     private func addRestartHandyItems(to menu: NSMenu) {
         guard model.isHandyRunning else { return }
         menu.addItem(.separator())

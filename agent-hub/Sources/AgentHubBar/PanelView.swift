@@ -225,8 +225,8 @@ private struct SettingsMenu: View {
                     .frame(width: 11, height: 15)
                     .rotationEffect(.degrees(35))
             }
-            else if model.isAnyAgentRunningLow {
-                Image(systemName: "exclamationmark").foregroundStyle(.orange)
+            else if model.isAnyAgentNearLimit {
+                Image(systemName: "battery.25percent").foregroundStyle(UsageMenuView.nearLimitColor)
             }
             else {
                 Image(systemName: "slider.horizontal.3")
@@ -240,7 +240,7 @@ private struct SettingsMenu: View {
         if model.isHandyFrozen { return "Usage and settings: Handy hangs while starting to record" }
         if model.isAnyAgentAsleep { return "Usage and settings: an agent has no 5-hour session" }
         if model.unusedClones.isEmpty == false { return "Usage and settings: clones are open with no agent and no local changes" }
-        if model.isAnyAgentRunningLow { return "Usage and settings: an agent has less than 20% of its 5-hour limit left" }
+        if model.isAnyAgentNearLimit { return "Usage and settings: an agent has used 80% or more of a limit" }
         return "Usage and settings"
     }
 }
