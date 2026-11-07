@@ -24,7 +24,7 @@ final class PanelModel: ObservableObject {
 
     private let defaults = UserDefaults.standard
 
-    // A link with {code} where the task code goes, e.g. a task tracker's search page.
+    // A link with {code} where a reported task code goes; a task reported as a link opens as it is.
     @Published var taskLinkTemplate: String {
         didSet { defaults.set(taskLinkTemplate, forKey: "taskLinkTemplate") }
     }
@@ -253,7 +253,7 @@ final class PanelModel: ObservableObject {
         if session.unityPid != nil {
             actions.append(.showUnity)
         }
-        if session.taskCode != nil {
+        if session.tasks.isEmpty == false {
             actions.append(.openTask)
         }
         if session.artifactUrl != nil {
@@ -371,14 +371,30 @@ final class PanelModel: ObservableObject {
         }
     }
 
-    // Without a link yet, asks for one first.
+    // One task opens at once; several are offered in a menu.
     func openTask(_ session: PanelSession) {
-        guard let code = session.taskCode else { return }
-        if taskLinkTemplate.isEmpty {
-            settingsMenu.askForTaskLinkTemplate()
+        if session.tasks.count == 1, let task = session.tasks.first {
+            open(task: task)
         }
-        guard taskLinkTemplate.isEmpty == false,
-              let url = URL(string: taskLinkTemplate.replacingOccurrences(of: "{code}", with: code.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? code)) else { return }
+        else {
+            settingsMenu.showTaskMenu(session.tasks)
+        }
+    }
+
+    // A code needs the tracker link from the settings; without one yet, asks for it first.
+    func open(task: String) {
+        let url: URL?
+        if task.hasPrefix("http://") || task.hasPrefix("https://") {
+            url = URL(string: task)
+        }
+        else {
+            if taskLinkTemplate.isEmpty {
+                settingsMenu.askForTaskLinkTemplate()
+            }
+            let encoded = task.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? task
+            url = taskLinkTemplate.isEmpty ? nil : URL(string: taskLinkTemplate.replacingOccurrences(of: "{code}", with: encoded))
+        }
+        guard let url else { return }
         onLeavingForEditor?()
         NSWorkspace.shared.open(url)
     }

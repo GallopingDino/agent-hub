@@ -246,7 +246,7 @@ final class SettingsMenuPresenter: NSObject {
     func askForTaskLinkTemplate() {
         let alert = NSAlert()
         alert.messageText = "Task Tracker Link"
-        alert.informativeText = "The task buttons open this link with {code} replaced by the agent's task code, such as BR-1566."
+        alert.informativeText = "Agents report their tasks as codes or links. A code opens through this link, with {code} replaced by the code."
         let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 380, height: 24))
         field.placeholderString = "https://app.asana.com/0/search?q={code}"
         field.stringValue = model.taskLinkTemplate
@@ -257,6 +257,21 @@ final class SettingsMenuPresenter: NSObject {
         NSApp.activate()
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         model.taskLinkTemplate = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    func showTaskMenu(_ tasks: [String]) {
+        let menu = NSMenu()
+        for task in tasks {
+            let item = makeItem(task, #selector(openTask(_:)))
+            item.representedObject = task
+            menu.addItem(item)
+        }
+        menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
+    }
+
+    @objc private func openTask(_ sender: NSMenuItem) {
+        guard let task = sender.representedObject as? String else { return }
+        model.open(task: task)
     }
 
     @objc private func editTaskLinkTemplate() {

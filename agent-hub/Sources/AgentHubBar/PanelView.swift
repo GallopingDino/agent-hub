@@ -688,9 +688,9 @@ private struct SessionRow: View {
                 actionButton(.showUnity, systemImage: "cube")
                     .help("Show the \(session.projectName) Unity editor")
             }
-            if let taskCode = session.taskCode {
+            if session.tasks.isEmpty == false {
                 actionButton(.openTask) { TaskTrackerIcon() }
-                    .help("Open \(taskCode) in the task tracker")
+                    .help("Open \(session.tasks.joined(separator: ", ")) in the task tracker")
             }
             if session.artifactUrl != nil {
                 actionButton(.openArtifact, systemImage: "globe")

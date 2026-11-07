@@ -38,7 +38,7 @@ struct AgentSession: Codable {
     let lastMessageExcerpt: String?
     let reviewFiles: [String]
     let artifactUrl: String?
-    let taskCode: String?
+    let tasks: [String]
     let riderProject: String?
     let hasTerminalTab: Bool
     let unityPid: Int32?

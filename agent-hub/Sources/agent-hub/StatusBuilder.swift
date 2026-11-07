@@ -155,7 +155,7 @@ enum StatusBuilder {
             lastMessageExcerpt: observed.lastMessage.map { makeExcerpt($0.text) },
             reviewFiles: reviewFiles,
             artifactUrl: observed.artifactUrl,
-            taskCode: TaskCodeFinder.find(sessionName: observed.name, branch: GitInspector.readBranch(of: clonePath ?? workingDirectory)),
+            tasks: TaskStore.read(forSession: observed.sessionId),
             riderProject: tab?.project,
             hasTerminalTab: tab != nil,
             unityPid: clonePath.flatMap { processTable.unityEditorPidByProject[$0] }
