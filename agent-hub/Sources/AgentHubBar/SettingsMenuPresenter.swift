@@ -71,7 +71,7 @@ final class SettingsMenuPresenter: NSObject {
         menu.addItem(.separator())
         let restart = makeItem(model.isHandyFrozen ? "Restart Handy (frozen)" : "Restart Handy", #selector(restartHandy))
         restart.isEnabled = model.isRestartingHandy == false
-        restart.image = NSImage(systemSymbolName: "hand.raised.slash", accessibilityDescription: nil)
+        restart.image = makeTemplateImage(of: FrozenHandyIcon())
         menu.addItem(restart)
     }
 
@@ -95,17 +95,20 @@ final class SettingsMenuPresenter: NSObject {
         for clone in clones {
             items.append(makeCloseUnusedItem("Close Unused: \(clone.name)", closing: [clone]))
         }
-        items.first?.image = makeBroomImage()
+        items.first?.image = makeTemplateImage(of: makeBroom())
         items.forEach(menu.addItem)
     }
 
-    private func makeBroomImage() -> NSImage? {
-        let broom = BroomShape()
+    private func makeBroom() -> some View {
+        BroomShape()
             .stroke(style: StrokeStyle(lineWidth: 1.3, lineCap: .round, lineJoin: .round))
             .frame(width: 10, height: 13)
             .rotationEffect(.degrees(35))
             .frame(width: 16, height: 16)
-        let renderer = ImageRenderer(content: broom)
+    }
+
+    private func makeTemplateImage(of view: some View) -> NSImage? {
+        let renderer = ImageRenderer(content: view)
         renderer.scale = NSScreen.main?.backingScaleFactor ?? 2
         let image = renderer.nsImage
         image?.isTemplate = true

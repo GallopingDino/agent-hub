@@ -214,7 +214,7 @@ private struct SettingsMenu: View {
                 ProgressView().controlSize(.small).scaleEffect(0.7)
             }
             else if model.isHandyFrozen {
-                Image(systemName: "hand.raised.slash")
+                FrozenHandyIcon()
             }
             else if model.isAnyAgentAsleep {
                 Image(systemName: "moon.zzz")
@@ -242,6 +242,14 @@ private struct SettingsMenu: View {
         if model.unusedClones.isEmpty == false { return "Usage and settings: clones are open with no agent and no local changes" }
         if model.isAnyAgentRunningLow { return "Usage and settings: an agent has less than 20% of its 5-hour limit left" }
         return "Usage and settings"
+    }
+}
+
+// Handy's open hand.
+struct FrozenHandyIcon: View {
+    var body: some View {
+        Image(systemName: "hand.raised.fingers.spread")
+            .font(.system(size: 14))
     }
 }
 
