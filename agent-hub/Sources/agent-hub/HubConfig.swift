@@ -8,7 +8,7 @@ struct HubConfig: Decodable {
     static let fallback = HubConfig(
         cloneRoots: [],
         staleAfterHours: 24,
-        openableExtensions: ["cs", "md", "json", "yaml", "yml", "asmdef", "asmref", "shader", "hlsl", "cginc", "uxml", "uss", "txt", "xml", "sh", "py"]
+        openableExtensions: ["cs", "md", "json", "yaml", "yml", "asmdef", "asmref", "shader", "hlsl", "cginc", "uxml", "uss", "txt", "xml", "sh", "py", "png", "jpg", "jpeg", "gif", "webp", "svg", "puml", "plantuml", "iuml", "pu", "mmd"]
     )
 
     static var configFile: URL {

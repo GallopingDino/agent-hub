@@ -5,6 +5,8 @@ import SwiftUI
 final class PanelModel: ObservableObject {
     private static let openPanelRefreshSeconds: UInt64 = 10
     private static let closedPanelRefreshSeconds: UInt64 = 120
+    private static let wakeUpUsageChecks = 6
+    private static let wakeUpUsageCheckIntervalSeconds = 5
 
     private let defaults = UserDefaults.standard
 
@@ -96,10 +98,21 @@ final class PanelModel: ObservableObject {
         isWakingUpAgents = true
         Task {
             showNotice(await HubClient.wakeUpAgents())
+            await waitForAgentsToWake()
+            isWakingUpAgents = false
+        }
+    }
+
+    // The usage APIs can take a few seconds to report the new window.
+    private func waitForAgentsToWake() async {
+        for attempt in 0..<Self.wakeUpUsageChecks {
+            if attempt > 0 {
+                try? await Task.sleep(for: .seconds(Self.wakeUpUsageCheckIntervalSeconds))
+            }
             if let fresh = await HubClient.fetchUsage(isBypassingCache: true) {
                 usage = fresh
             }
-            isWakingUpAgents = false
+            if isAnyAgentAsleep == false { return }
         }
     }
 

@@ -21,6 +21,7 @@ enum AgentUsageReader {
 
     private static let maxCacheAgeSeconds: TimeInterval = 60
     private static let requestTimeoutSeconds: TimeInterval = 5
+    private static let codexIdleCheckDelaySeconds: TimeInterval = 1.2
     private static let claudeUsageUrl = URL(string: "https://api.anthropic.com/api/oauth/usage")!
 
     private static var cacheFile: URL {
@@ -95,10 +96,19 @@ enum AgentUsageReader {
     }
 
     private static func readCodexUsage() -> AgentUsage {
-        guard let limits = CodexAppServerClient.connect()?.readRateLimits() else {
+        guard let client = CodexAppServerClient.connect(), let limits = client.readRateLimits() else {
             return AgentUsage(agent: .codex, fiveHour: nil, weekly: nil, error: "usage unavailable")
         }
-        return AgentUsage(agent: .codex, fiveHour: activeWindow(limits.fiveHour), weekly: limits.weekly, error: nil)
+        let fiveHour = isCodexWindowIdle(limits.fiveHour, client) ? nil : activeWindow(limits.fiveHour)
+        return AgentUsage(agent: .codex, fiveHour: fiveHour, weekly: limits.weekly, error: nil)
+    }
+
+    // With no window running, Codex reports an unused window that resets 5 hours from the moment of asking, so its reset time moves.
+    private static func isCodexWindowIdle(_ window: UsageWindow?, _ client: CodexAppServerClient) -> Bool {
+        guard let window, window.usedPercent == 0 else { return false }
+        Thread.sleep(forTimeInterval: codexIdleCheckDelaySeconds)
+        guard let again = client.readRateLimits()?.fiveHour else { return false }
+        return again.resetsAt != window.resetsAt
     }
 
     // A window whose reset time has passed still reports its old numbers until the next request opens a new one.
