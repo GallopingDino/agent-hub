@@ -44,6 +44,7 @@ final class StatusItemController: NSObject {
         // The menu runs its own event loop, so the keys are released right away instead of through a publisher.
         model.onSettingsMenuToggled = { [weak self] in
             guard let self else { return }
+            self.updateEscapeHotKey()
             self.updateLetterHotKeys(isEditingName: self.model.isEditingName)
             self.updateClosingHotKeys()
         }
@@ -165,24 +166,7 @@ final class StatusItemController: NSObject {
         NSApp.activate()
         panel.makeKeyAndOrderFront(nil)
         statusItem.button?.highlight(true)
-        // The panel cannot take keyboard focus from the active app, so its keys are grabbed only while it is shown.
-        escapeHotKey = GlobalHotKey(keyCode: kVK_Escape, modifiers: 0) {
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                if self.model.isSettingsMenuOpen {
-                    self.model.closeSettingsMenu()
-                }
-                else if self.model.confirmingCloseSessionId != nil {
-                    self.model.cancelClosing()
-                }
-                else if self.model.selectedSessionId != nil {
-                    self.model.deselectSession()
-                }
-                else {
-                    self.hidePanel()
-                }
-            }
-        }
+        updateEscapeHotKey()
         updateLetterHotKeys(isEditingName: model.isEditingName)
         updateClosingHotKeys()
         outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
@@ -195,13 +179,38 @@ final class StatusItemController: NSObject {
         panel.orderOut(nil)
         statusItem.button?.highlight(false)
         model.panelDidClose()
-        escapeHotKey = nil
+        updateEscapeHotKey()
         updateLetterHotKeys(isEditingName: model.isEditingName)
         updateClosingHotKeys()
         if let outsideClickMonitor {
             NSEvent.removeMonitor(outsideClickMonitor)
         }
         outsideClickMonitor = nil
+    }
+
+    // The panel cannot take keyboard focus from the active app, so its keys are grabbed only while it is shown.
+    // An open settings menu gets Escape itself and closes on it.
+    private func updateEscapeHotKey() {
+        guard panel.isVisible, model.isSettingsMenuOpen == false else {
+            escapeHotKey = nil
+            return
+        }
+        guard escapeHotKey == nil else { return }
+
+        escapeHotKey = GlobalHotKey(keyCode: kVK_Escape, modifiers: 0) {
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                if self.model.confirmingCloseSessionId != nil {
+                    self.model.cancelClosing()
+                }
+                else if self.model.selectedSessionId != nil {
+                    self.model.deselectSession()
+                }
+                else {
+                    self.hidePanel()
+                }
+            }
+        }
     }
 
     // R refreshes, S toggles the settings menu and the arrows move the selection, only while the panel is shown and no name is being typed.
@@ -222,7 +231,8 @@ final class StatusItemController: NSObject {
                         self.model.closeSettingsMenu()
                     }
                     else {
-                        self.model.showSettingsMenu(at: self.findSettingsMenuPoint())
+                        // Not from inside this main-queue block: the menu's own loop would hold the queue and starve the other keys.
+                        RunLoop.main.perform { self.model.showSettingsMenu(at: self.findSettingsMenuPoint()) }
                     }
                 }
             }
