@@ -56,6 +56,7 @@ final class PanelModel: ObservableObject {
     private lazy var settingsMenu = SettingsMenuPresenter(model: self)
 
     var onLeavingForEditor: (() -> Void)?
+    var onSettingsMenuToggled: (() -> Void)?
 
     var attentionCount: Int {
         status?.sessions.filter(\.isNeedingUser).count ?? 0

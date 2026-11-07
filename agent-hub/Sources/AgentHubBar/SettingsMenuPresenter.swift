@@ -47,8 +47,10 @@ final class SettingsMenuPresenter: NSObject {
         menu.addItem(makeItem("Quit Agent Hub", #selector(quit)))
 
         openMenu = menu
+        model.onSettingsMenuToggled?()
         menu.popUp(positioning: nil, at: point ?? NSEvent.mouseLocation, in: nil)
         openMenu = nil
+        model.onSettingsMenuToggled?()
     }
 
     func close() {

@@ -41,6 +41,12 @@ final class StatusItemController: NSObject {
         super.init()
         panel.onCancel = { [weak self] in self?.hidePanel() }
         model.onLeavingForEditor = { [weak self] in self?.hidePanel() }
+        // The menu runs its own event loop, so the keys are released right away instead of through a publisher.
+        model.onSettingsMenuToggled = { [weak self] in
+            guard let self else { return }
+            self.updateLetterHotKeys(isEditingName: self.model.isEditingName)
+            self.updateClosingHotKeys()
+        }
 
         configureStatusButton()
         configurePanel()
@@ -199,10 +205,30 @@ final class StatusItemController: NSObject {
     }
 
     // R refreshes, S toggles the settings menu and the arrows move the selection, only while the panel is shown and no name is being typed.
+    // While the settings menu is open only S stays, so the menu gets the arrows and Return.
     private func updateLetterHotKeys(isEditingName: Bool) {
         guard panel.isVisible, isEditingName == false else {
             refreshHotKey = nil
             settingsHotKey = nil
+            previousSessionHotKey = nil
+            nextSessionHotKey = nil
+            return
+        }
+        if settingsHotKey == nil {
+            settingsHotKey = GlobalHotKey(keyCode: kVK_ANSI_S, modifiers: 0) {
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    if self.model.isSettingsMenuOpen {
+                        self.model.closeSettingsMenu()
+                    }
+                    else {
+                        self.model.showSettingsMenu(at: self.findSettingsMenuPoint())
+                    }
+                }
+            }
+        }
+        guard model.isSettingsMenuOpen == false else {
+            refreshHotKey = nil
             previousSessionHotKey = nil
             nextSessionHotKey = nil
             return
@@ -221,17 +247,6 @@ final class StatusItemController: NSObject {
         nextSessionHotKey = GlobalHotKey(keyCode: kVK_DownArrow, modifiers: 0) {
             DispatchQueue.main.async { [weak self] in self?.moveSelection(by: 1) }
         }
-        settingsHotKey = GlobalHotKey(keyCode: kVK_ANSI_S, modifiers: 0) {
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                if self.model.isSettingsMenuOpen {
-                    self.model.closeSettingsMenu()
-                }
-                else {
-                    self.model.showSettingsMenu(at: self.findSettingsMenuPoint())
-                }
-            }
-        }
     }
 
     private func moveSelection(by offset: Int) {
@@ -240,7 +255,7 @@ final class StatusItemController: NSObject {
 
     // For the selected agent: Control-X closes its tab, Command-Down shows it, Option-Tab renames it, Left and Right move between its buttons or answers, Return activates.
     private func updateClosingHotKeys() {
-        let isActive = panel.isVisible && model.isEditingName == false && model.selectedSessionId != nil
+        let isActive = panel.isVisible && model.isEditingName == false && model.isSettingsMenuOpen == false && model.selectedSessionId != nil
         guard isActive else {
             closeSessionHotKey = nil
             returnHotKey = nil
