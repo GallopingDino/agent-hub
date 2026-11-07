@@ -207,6 +207,9 @@ final class StatusItemController: NSObject {
                 if self.model.confirmingCloseSessionId != nil {
                     self.model.cancelClosing()
                 }
+                else if self.model.choosingTaskSessionId != nil {
+                    self.model.cancelChoosingTask()
+                }
                 else if self.model.selectedSessionId != nil {
                     self.model.deselectSession()
                 }

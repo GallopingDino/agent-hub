@@ -259,21 +259,6 @@ final class SettingsMenuPresenter: NSObject {
         model.taskLinkTemplate = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    func showTaskMenu(_ tasks: [String]) {
-        let menu = NSMenu()
-        for task in tasks {
-            let item = makeItem(task, #selector(openTask(_:)))
-            item.representedObject = task
-            menu.addItem(item)
-        }
-        menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
-    }
-
-    @objc private func openTask(_ sender: NSMenuItem) {
-        guard let task = sender.representedObject as? String else { return }
-        model.open(task: task)
-    }
-
     @objc private func editTaskLinkTemplate() {
         askForTaskLinkTemplate()
     }

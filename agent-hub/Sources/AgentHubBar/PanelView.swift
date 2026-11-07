@@ -690,7 +690,7 @@ private struct SessionRow: View {
             }
             if session.tasks.isEmpty == false {
                 actionButton(.openTask) { TaskTrackerIcon() }
-                    .help("Open \(session.tasks.joined(separator: ", ")) in the task tracker")
+                    .help("Open \(session.tasks.map(\.title).joined(separator: ", ")) in the task tracker")
             }
             if session.artifactUrl != nil {
                 actionButton(.openArtifact, systemImage: "globe")
@@ -740,6 +740,10 @@ private struct SessionSelectionFooter: View {
             confirmation
                 .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .topLeading)))
         }
+        else if model.choosingTaskSessionId == session.id {
+            taskChoice
+                .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .topLeading)))
+        }
         else {
             HStack(spacing: 6) {
                 if session.hasTerminalTab {
@@ -778,6 +782,20 @@ private struct SessionSelectionFooter: View {
         .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(Color.orange.opacity(0.3), lineWidth: 1))
     }
 
+    private var taskChoice: some View {
+        HStack(spacing: 6) {
+            ForEach(Array(session.tasks.enumerated()), id: \.offset) { index, task in
+                Button(task.title) { model.open(task: task) }
+                .buttonStyle(FooterButtonStyle(isProminent: model.highlightedTaskIndex == index, prominentColor: .accentColor))
+                .help(task.link ?? task.title)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Color.primary.opacity(0.05)))
+        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(Color.primary.opacity(0.12), lineWidth: 1))
+    }
+
     private func optionButton(_ title: String, option: CloseConfirmationOption) -> some View {
         Button(title) { model.choose(option, for: session) }
         .buttonStyle(FooterButtonStyle(isProminent: model.highlightedCloseOption == option))
@@ -803,6 +821,7 @@ private struct KeyCap: View {
 
 private struct FooterButtonStyle: ButtonStyle {
     let isProminent: Bool
+    var prominentColor = Color.orange
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -810,7 +829,7 @@ private struct FooterButtonStyle: ButtonStyle {
             .padding(.horizontal, 9)
             .frame(height: 22)
             .foregroundStyle(isProminent ? Color.white : Color.primary)
-            .background(Capsule().fill(isProminent ? Color.orange : Color.primary.opacity(0.08)))
+            .background(Capsule().fill(isProminent ? prominentColor : Color.primary.opacity(0.08)))
             .scaleEffect(configuration.isPressed ? 0.95 : 1)
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }

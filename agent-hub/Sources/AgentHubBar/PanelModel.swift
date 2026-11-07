@@ -44,13 +44,19 @@ final class PanelModel: ObservableObject {
     @Published private(set) var recentProjects: [PanelRecentProject] = []
     @Published var isInactiveExpanded = false
     @Published private(set) var selectedSessionId: String? {
-        didSet { highlightedSessionAction = selectedSession.flatMap { findAvailableActions(for: $0).first } }
+        didSet {
+            highlightedSessionAction = selectedSession.flatMap { findAvailableActions(for: $0).first }
+            choosingTaskSessionId = nil
+        }
     }
     @Published private(set) var highlightedSessionAction: SessionAction?
     @Published private(set) var renamingSessionId: String?
     // The last agent of a project asks before its IDE window and Unity editor go too.
     @Published private(set) var confirmingCloseSessionId: String?
     @Published private(set) var highlightedCloseOption = CloseConfirmationOption.closeAll
+    // A session with several tasks asks which one to open, the way closing the last agent asks.
+    @Published private(set) var choosingTaskSessionId: String?
+    @Published private(set) var highlightedTaskIndex = 0
     @Published private(set) var closingSessionIds: Set<String> = []
     @Published private(set) var isWakingUpAgents = false
     @Published private(set) var isClosingUnusedClones = false
@@ -230,6 +236,10 @@ final class PanelModel: ObservableObject {
         confirmingCloseSessionId = nil
     }
 
+    func cancelChoosingTask() {
+        choosingTaskSessionId = nil
+    }
+
     func cancelClosing() {
         confirmingCloseSessionId = nil
     }
@@ -239,6 +249,9 @@ final class PanelModel: ObservableObject {
         guard let session = selectedSession else { return }
         if confirmingCloseSessionId == session.id {
             moveCloseHighlight(by: offset)
+        }
+        else if choosingTaskSessionId == session.id {
+            highlightedTaskIndex = min(max(highlightedTaskIndex + offset, 0), session.tasks.count - 1)
         }
         else {
             moveActionHighlight(in: findAvailableActions(for: session), by: offset)
@@ -331,6 +344,9 @@ final class PanelModel: ObservableObject {
         if confirmingCloseSessionId == session.id {
             choose(highlightedCloseOption, for: session)
         }
+        else if choosingTaskSessionId == session.id, session.tasks.indices.contains(highlightedTaskIndex) {
+            open(task: session.tasks[highlightedTaskIndex])
+        }
         else if let action = highlightedSessionAction {
             perform(action, for: session)
         }
@@ -371,28 +387,36 @@ final class PanelModel: ObservableObject {
         }
     }
 
-    // One task opens at once; several are offered in a menu.
+    // One task opens at once; with several, the row asks which one.
     func openTask(_ session: PanelSession) {
         if session.tasks.count == 1, let task = session.tasks.first {
             open(task: task)
+            return
         }
-        else {
-            settingsMenu.showTaskMenu(session.tasks)
+        if selectedSessionId != session.id {
+            selectedSessionId = session.id
         }
+        confirmingCloseSessionId = nil
+        highlightedTaskIndex = 0
+        choosingTaskSessionId = session.id
     }
 
-    // A code needs the tracker link from the settings; without one yet, asks for it first.
-    func open(task: String) {
+    // A task without a link opens through the tracker link from the settings; without one yet, asks for it first.
+    func open(task: PanelTask) {
+        choosingTaskSessionId = nil
         let url: URL?
-        if task.hasPrefix("http://") || task.hasPrefix("https://") {
-            url = URL(string: task)
+        if let link = task.link {
+            url = URL(string: link)
         }
-        else {
+        else if let code = task.code {
             if taskLinkTemplate.isEmpty {
                 settingsMenu.askForTaskLinkTemplate()
             }
-            let encoded = task.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? task
+            let encoded = code.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? code
             url = taskLinkTemplate.isEmpty ? nil : URL(string: taskLinkTemplate.replacingOccurrences(of: "{code}", with: encoded))
+        }
+        else {
+            url = nil
         }
         guard let url else { return }
         onLeavingForEditor?()

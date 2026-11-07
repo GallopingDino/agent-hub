@@ -8,7 +8,7 @@ usage:
   agent-hub sessions --json       live agent sessions only, without Rider tabs (used by the Rider plugin)
   agent-hub usage [--json] [--fresh]  5-hour and weekly limits of Claude Code and Codex (cached for 5 minutes)
   agent-hub wake-up               start a 5-hour window for each agent with one short request outside any project
-  agent-hub task <code or link>...  set the tasks of the Claude Code or Codex session this runs in; --clear forgets them
+  agent-hub task <code=link | code | link>...  set the tasks of the Claude Code or Codex session this runs in; --clear forgets them
   agent-hub reset-usage codex     spend one of Codex's free resets of its 5-hour and weekly limits
   agent-hub focus <session>       show the agent's terminal tab in Rider
   agent-hub open-files <session>  open the agent's still-changed code files in Rider (no prefabs/scenes/assets)
@@ -83,7 +83,7 @@ case "usage":
 case "task":
     guard arguments.count >= 2 else { exitWithError(usage) }
     guard let sessionId = TaskStore.findCallingSessionId() else { exitWithError("run this from inside a Claude Code or Codex session") }
-    let tasks = arguments.contains("--clear") ? [] : Array(arguments.dropFirst())
+    let tasks = arguments.contains("--clear") ? [] : arguments.dropFirst().map(TaskStore.parse)
     guard TaskStore.save(tasks, forSession: sessionId) else { exitWithError("could not save the tasks") }
 
 case "reset-usage":

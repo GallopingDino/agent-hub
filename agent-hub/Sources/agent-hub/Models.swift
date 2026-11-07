@@ -38,10 +38,16 @@ struct AgentSession: Codable {
     let lastMessageExcerpt: String?
     let reviewFiles: [String]
     let artifactUrl: String?
-    let tasks: [String]
+    let tasks: [TaskReference]
     let riderProject: String?
     let hasTerminalTab: Bool
     let unityPid: Int32?
+}
+
+// An agent may know a task's code, its link or both.
+struct TaskReference: Codable {
+    let code: String?
+    let link: String?
 }
 
 struct CloneState: Codable {

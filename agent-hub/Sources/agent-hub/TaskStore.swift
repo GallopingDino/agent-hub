@@ -13,7 +13,17 @@ enum TaskStore {
         return [environment["CLAUDE_CODE_SESSION_ID"], environment["CODEX_THREAD_ID"]].compactMap { $0 }.first { $0.isEmpty == false }
     }
 
-    static func save(_ tasks: [String], forSession sessionId: String) -> Bool {
+    // "ABC-123=https://…" names both; a lone argument is a link when it has a scheme, otherwise a code.
+    static func parse(_ argument: String) -> TaskReference {
+        if let separator = argument.firstIndex(of: "="), argument[..<separator].contains("://") == false {
+            let code = String(argument[..<separator])
+            let link = String(argument[argument.index(after: separator)...])
+            return TaskReference(code: code.isEmpty ? nil : code, link: link.isEmpty ? nil : link)
+        }
+        return argument.contains("://") ? TaskReference(code: nil, link: argument) : TaskReference(code: argument, link: nil)
+    }
+
+    static func save(_ tasks: [TaskReference], forSession sessionId: String) -> Bool {
         let file = fileUrl(of: sessionId)
         guard tasks.isEmpty == false else {
             try? FileManager.default.removeItem(at: file)
@@ -30,9 +40,9 @@ enum TaskStore {
         }
     }
 
-    static func read(forSession sessionId: String) -> [String] {
+    static func read(forSession sessionId: String) -> [TaskReference] {
         guard let data = try? Data(contentsOf: fileUrl(of: sessionId)) else { return [] }
-        return (try? JSONDecoder().decode([String].self, from: data)) ?? []
+        return (try? JSONDecoder().decode([TaskReference].self, from: data)) ?? []
     }
 
     private static func fileUrl(of sessionId: String) -> URL {

@@ -22,7 +22,7 @@ struct PanelSession: Decodable, Identifiable {
     let lastMessageExcerpt: String?
     let reviewFiles: [String]
     let artifactUrl: String?
-    let tasks: [String]
+    let tasks: [PanelTask]
     let hasTerminalTab: Bool
     let unityPid: Int32?
 
@@ -46,6 +46,18 @@ struct PanelSession: Decodable, Identifiable {
         case "idle": return 3
         default: return 4
         }
+    }
+}
+
+struct PanelTask: Decodable {
+    let code: String?
+    let link: String?
+
+    // A bare link is shortened to its last path part, which trackers fill with the task's id.
+    var title: String {
+        if let code { return code }
+        guard let link, let url = URL(string: link) else { return "task" }
+        return url.lastPathComponent.isEmpty || url.lastPathComponent == "/" ? (url.host ?? link) : url.lastPathComponent
     }
 }
 
