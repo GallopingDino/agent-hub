@@ -14,10 +14,6 @@ enum HandyApp {
         FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/\(bundleIdentifier)/handy.log")
     }
 
-    static var isRunning: Bool {
-        NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier).isEmpty == false
-    }
-
     // Frozen: the last recording start never finished, and the log has been silent since, in the Handy that runs now.
     static func isFrozen() -> Bool {
         guard let handy = NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier).first,

@@ -49,7 +49,6 @@ final class PanelModel: ObservableObject {
     @Published private(set) var closingSessionIds: Set<String> = []
     @Published private(set) var isWakingUpAgents = false
     @Published private(set) var isClosingUnusedClones = false
-    @Published private(set) var isHandyRunning = false
     @Published private(set) var isHandyFrozen = false
     @Published private(set) var isRestartingHandy = false
     // While a name is typed, the panel's letter shortcuts must not swallow the keys.
@@ -469,11 +468,7 @@ final class PanelModel: ObservableObject {
     }
 
     private func checkHandy() {
-        let isRunning = HandyApp.isRunning
-        let isFrozen = isRunning && HandyApp.isFrozen()
-        if isHandyRunning != isRunning {
-            isHandyRunning = isRunning
-        }
+        let isFrozen = HandyApp.isFrozen()
         if isHandyFrozen != isFrozen {
             isHandyFrozen = isFrozen
         }

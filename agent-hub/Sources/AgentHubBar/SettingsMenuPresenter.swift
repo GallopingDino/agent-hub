@@ -75,9 +75,9 @@ final class SettingsMenuPresenter: NSObject {
     }
 
     private func addRestartHandyItems(to menu: NSMenu) {
-        guard model.isHandyRunning else { return }
+        guard model.isHandyFrozen else { return }
         menu.addItem(.separator())
-        let restart = makeItem(model.isHandyFrozen ? "Restart Handy (frozen)" : "Restart Handy", #selector(restartHandy))
+        let restart = makeItem("Restart Handy", #selector(restartHandy))
         restart.isEnabled = model.isRestartingHandy == false
         restart.image = makeTemplateImage(of: FrozenHandyIcon())
         menu.addItem(restart)
