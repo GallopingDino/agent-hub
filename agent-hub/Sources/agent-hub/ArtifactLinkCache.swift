@@ -11,6 +11,8 @@ struct ArtifactLinkCache {
     private static let chunkOverlap = 256
     private static let linkMarker = Data("claude.ai/artifact/".utf8)
     private static let publishResultPrefixes = [Data("url\\\":\\\"https://".utf8), Data("url\":\"https://".utf8)]
+    // A publish made from an Artifact type also names that type's own page, which is not the agent's artifact.
+    private static let artifactTypePrefixes = [Data("type\\\":{\\\"url\\\":\\\"https://".utf8), Data("type\":{\"url\":\"https://".utf8)]
 
     private static var cacheFile: URL {
         FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Caches/agent-hub/artifact-links.json")
@@ -75,7 +77,11 @@ struct ArtifactLinkCache {
     }
 
     private static func isPublishResult(_ chunk: Data, linkStart: Data.Index) -> Bool {
-        publishResultPrefixes.contains { prefix in
+        isPreceded(chunk, linkStart: linkStart, byAnyOf: publishResultPrefixes) && isPreceded(chunk, linkStart: linkStart, byAnyOf: artifactTypePrefixes) == false
+    }
+
+    private static func isPreceded(_ chunk: Data, linkStart: Data.Index, byAnyOf prefixes: [Data]) -> Bool {
+        prefixes.contains { prefix in
             guard linkStart - chunk.startIndex >= prefix.count else { return false }
             return chunk[(linkStart - prefix.count)..<linkStart] == prefix
         }
