@@ -45,16 +45,13 @@ final class SettingsMenuPresenter: NSObject {
 
         menu.addItem(.separator())
         menu.addItem(makeItem("Quit Agent Hub", #selector(quit)))
+        menu.addItem(makeCloseKeyItem())
 
         openMenu = menu
         model.onSettingsMenuToggled?()
         menu.popUp(positioning: nil, at: point ?? NSEvent.mouseLocation, in: nil)
         openMenu = nil
         model.onSettingsMenuToggled?()
-    }
-
-    func close() {
-        openMenu?.cancelTracking()
     }
 
     private func addUsageItems(to menu: NSMenu) {
@@ -108,6 +105,16 @@ final class SettingsMenuPresenter: NSObject {
         let item = makeItem(title, #selector(closeUnusedClones(_:)))
         item.representedObject = clones.map(\.name)
         item.isEnabled = model.isClosingUnusedClones == false
+        return item
+    }
+
+    // S closes the open menu the way it opened it; choosing any item closes the menu.
+    private func makeCloseKeyItem() -> NSMenuItem {
+        let item = makeItem("Close Menu", #selector(closeMenu))
+        item.keyEquivalent = "s"
+        item.keyEquivalentModifierMask = []
+        item.isHidden = true
+        item.allowsKeyEquivalentWhenHidden = true
         return item
     }
 
@@ -186,6 +193,9 @@ final class SettingsMenuPresenter: NSObject {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
         item.target = self
         return item
+    }
+
+    @objc private func closeMenu() {
     }
 
     @objc private func wakeUpAgents() {

@@ -213,37 +213,25 @@ final class StatusItemController: NSObject {
         }
     }
 
-    // R refreshes, S toggles the settings menu and the arrows move the selection, only while the panel is shown and no name is being typed.
-    // While the settings menu is open only S stays, so the menu gets the arrows and Return.
+    // R refreshes, S opens the settings menu and the arrows move the selection, only while the panel is shown and no name is being typed.
+    // An open menu gets every key itself: hot keys pressed during it would only fire after it closes.
     private func updateLetterHotKeys(isEditingName: Bool) {
-        guard panel.isVisible, isEditingName == false else {
+        guard panel.isVisible, isEditingName == false, model.isSettingsMenuOpen == false else {
             refreshHotKey = nil
             settingsHotKey = nil
             previousSessionHotKey = nil
             nextSessionHotKey = nil
             return
         }
-        if settingsHotKey == nil {
-            settingsHotKey = GlobalHotKey(keyCode: kVK_ANSI_S, modifiers: 0) {
-                DispatchQueue.main.async { [weak self] in
-                    guard let self else { return }
-                    if self.model.isSettingsMenuOpen {
-                        self.model.closeSettingsMenu()
-                    }
-                    else {
-                        // Not from inside this main-queue block: the menu's own loop would hold the queue and starve the other keys.
-                        RunLoop.main.perform { self.model.showSettingsMenu(at: self.findSettingsMenuPoint()) }
-                    }
-                }
+        guard refreshHotKey == nil else { return }
+
+        settingsHotKey = GlobalHotKey(keyCode: kVK_ANSI_S, modifiers: 0) {
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                // Not from inside this main-queue block: the menu's own loop would hold the queue.
+                RunLoop.main.perform { self.model.showSettingsMenu(at: self.findSettingsMenuPoint()) }
             }
         }
-        guard model.isSettingsMenuOpen == false else {
-            refreshHotKey = nil
-            previousSessionHotKey = nil
-            nextSessionHotKey = nil
-            return
-        }
-        guard refreshHotKey == nil else { return }
 
         refreshHotKey = GlobalHotKey(keyCode: kVK_ANSI_R, modifiers: 0) {
             DispatchQueue.main.async { [weak self] in

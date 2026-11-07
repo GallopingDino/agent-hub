@@ -132,10 +132,6 @@ final class PanelModel: ObservableObject {
         settingsMenu.show(at: point)
     }
 
-    func closeSettingsMenu() {
-        settingsMenu.close()
-    }
-
     func wakeUpAgents() {
         guard isWakingUpAgents == false else { return }
         isWakingUpAgents = true
