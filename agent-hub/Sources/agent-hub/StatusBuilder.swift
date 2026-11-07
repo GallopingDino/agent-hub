@@ -22,6 +22,7 @@ private struct ObservedSession {
 enum StatusBuilder {
     private static let maxParallelJobs = 4
     private static let previewLength = 140
+    private static let excerptLength = 600
     private static let codexFallbackNameLength = 40
 
     static func build(config: HubConfig) -> HubStatus {
@@ -150,6 +151,7 @@ enum StatusBuilder {
             waitingFor: observed.status == "waiting" ? observed.waitingFor : nil,
             idleSeconds: observed.idleSeconds,
             lastMessagePreview: observed.lastMessage.map { makePreview($0.text) },
+            lastMessageExcerpt: observed.lastMessage.map { makeExcerpt($0.text) },
             reviewFiles: reviewFiles,
             artifactUrl: observed.artifactUrl,
             riderProject: tab?.project,
@@ -205,15 +207,28 @@ enum StatusBuilder {
     }
 
     private static func makePreview(_ text: String) -> String {
-        let firstLine = text
+        truncate(makePlainLines(text).first ?? "", to: previewLength)
+    }
+
+    private static func makeExcerpt(_ text: String) -> String {
+        truncate(makePlainLines(text).joined(separator: "\n"), to: excerptLength)
+    }
+
+    private static func makePlainLines(_ text: String) -> [String] {
+        text
             .split(separator: "\n")
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .first { $0.isEmpty == false } ?? ""
-        let plain = firstLine
-            .replacingOccurrences(of: "**", with: "")
-            .replacingOccurrences(of: "`", with: "")
-            .trimmingCharacters(in: CharacterSet(charactersIn: "#>-• ").union(.whitespaces))
-        return plain.count > previewLength ? String(plain.prefix(previewLength)) + "…" : plain
+            .filter { $0.trimmingCharacters(in: .whitespaces).hasPrefix("```") == false }
+            .map { line in
+                line
+                    .replacingOccurrences(of: "**", with: "")
+                    .replacingOccurrences(of: "`", with: "")
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "#>-• ").union(.whitespaces))
+            }
+            .filter { $0.isEmpty == false }
+    }
+
+    private static func truncate(_ text: String, to length: Int) -> String {
+        text.count > length ? String(text.prefix(length)) + "…" : text
     }
 
     private static func parallelMap<T, R>(_ items: [T], _ transform: (T) -> R) -> [R] {

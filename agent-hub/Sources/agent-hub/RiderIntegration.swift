@@ -32,6 +32,10 @@ struct RiderIntegration: IdeIntegration {
         ChildProcess.run("/usr/bin/open", ["-b", Self.bundleId, project.openTarget])?.isSuccess ?? false
     }
 
+    func closeProject(directory: String) -> Bool {
+        AgentTabsClient.closeProject(directory).ok
+    }
+
     // Rider also lists single files it once opened, such as a CMakeLists.txt; their project is the containing directory.
     private static func findDirectory(of openTarget: String) -> String {
         var isDirectory: ObjCBool = false

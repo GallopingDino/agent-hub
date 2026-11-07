@@ -15,10 +15,18 @@ protocol IdeIntegration {
 
     func readRecentProjects() -> [IdeRecentProject]
     func openProject(_ project: IdeRecentProject) -> Bool
+    func closeProject(directory: String) -> Bool
 }
 
 enum IdeIntegrations {
     static let all: [any IdeIntegration] = [RiderIntegration()]
+
+    // Returns false when no IDE has the project open or the IDE refused.
+    static func closeProject(directory: String) -> Bool {
+        let normalized = ProcessTable.normalize(directory)
+        let owner = all.first { ide in ide.readRecentProjects().contains { $0.isOpen && $0.directory == normalized } }
+        return owner?.closeProject(directory: normalized) ?? false
+    }
 
     static func readOpenProjectDirectories() -> Set<String> {
         Set(all.flatMap { $0.readRecentProjects() }.filter(\.isOpen).map(\.directory))

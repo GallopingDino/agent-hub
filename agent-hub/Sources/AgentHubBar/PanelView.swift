@@ -6,7 +6,6 @@ struct PanelView: View {
 
     @ObservedObject var model: PanelModel
     @State private var listHeight: CGFloat = 120
-    @State private var isInactiveExpanded = false
     @State private var cardFrames: [String: CGRect] = [:]
     @State private var drag: GroupDrag?
 
@@ -17,26 +16,25 @@ struct PanelView: View {
                 NoticeBanner(text: notice)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
-            ScrollView {
-                content
-                    .padding(10)
-                    .background(GeometryReader { geometry in
-                        Color.clear.preference(key: ListHeightKey.self, value: geometry.size.height)
-                    })
+            ScrollViewReader { scroller in
+                ScrollView {
+                    content
+                        .padding(10)
+                        .background(GeometryReader { geometry in
+                            Color.clear.preference(key: ListHeightKey.self, value: geometry.size.height)
+                        })
+                }
+                .onChange(of: model.selectedSessionId) { _, selectedId in
+                    guard let selectedId else { return }
+                    withAnimation(.easeOut(duration: 0.2)) { scroller.scrollTo(selectedId) }
+                }
             }
             .frame(height: min(listHeight, Self.maxListHeight))
             .onPreferenceChange(ListHeightKey.self) { listHeight = $0 }
-            if freeClones.isEmpty == false {
-                PanelFooter(freeClones: freeClones)
-            }
         }
         .frame(width: 480)
         .focusEffectDisabled()
         .animation(.easeOut(duration: 0.2), value: model.notice)
-    }
-
-    private var freeClones: [PanelClone] {
-        model.status?.clones.filter { $0.isRunning && $0.isFree } ?? []
     }
 
     @ViewBuilder
@@ -79,7 +77,7 @@ struct PanelView: View {
         return GroupCard(
             group: group,
             model: model,
-            isInactiveExpanded: $isInactiveExpanded,
+            isInactiveExpanded: $model.isInactiveExpanded,
             isDragged: isDragged,
             isMergeTarget: isMergeTarget,
             onDragChanged: { value in drag = GroupDrag(groupId: group.id, translation: value.translation.height, pointerY: value.location.y) },
@@ -212,11 +210,17 @@ private struct SettingsMenu: View {
         Button {
             model.showSettingsMenu()
         } label: {
-            if model.isWakingUpAgents {
+            if model.isWakingUpAgents || model.isClosingUnusedClones {
                 ProgressView().controlSize(.small).scaleEffect(0.7)
             }
             else if model.isAnyAgentAsleep {
                 Image(systemName: "moon.zzz")
+            }
+            else if model.unusedClones.isEmpty == false {
+                BroomShape()
+                    .stroke(style: StrokeStyle(lineWidth: 1.3, lineCap: .round, lineJoin: .round))
+                    .frame(width: 11, height: 15)
+                    .rotationEffect(.degrees(35))
             }
             else if model.isAnyAgentRunningLow {
                 Image(systemName: "exclamationmark").foregroundStyle(.orange)
@@ -231,8 +235,32 @@ private struct SettingsMenu: View {
 
     private var helpText: String {
         if model.isAnyAgentAsleep { return "Usage and settings: an agent has no 5-hour session" }
+        if model.unusedClones.isEmpty == false { return "Usage and settings: clones are open with no agent and no local changes" }
         if model.isAnyAgentRunningLow { return "Usage and settings: an agent has less than 20% of its 5-hour limit left" }
         return "Usage and settings"
+    }
+}
+
+// A handle over a bound bundle of bristles, drawn upright; SF Symbols has no broom.
+private struct BroomShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let width = rect.width
+        let height = rect.height
+        let bandTop = height * 0.5
+        let bristlesTop = height * 0.6
+        var path = Path()
+        path.move(to: CGPoint(x: rect.midX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.midX, y: bandTop))
+        path.addRect(CGRect(x: width * 0.25, y: bandTop, width: width * 0.5, height: bristlesTop - bandTop))
+        path.move(to: CGPoint(x: width * 0.25, y: bristlesTop))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: width * 0.75, y: bristlesTop))
+        path.move(to: CGPoint(x: width * 0.42, y: bristlesTop))
+        path.addLine(to: CGPoint(x: width * 0.33, y: rect.maxY))
+        path.move(to: CGPoint(x: width * 0.58, y: bristlesTop))
+        path.addLine(to: CGPoint(x: width * 0.67, y: rect.maxY))
+        return path.offsetBy(dx: rect.minX, dy: rect.minY)
     }
 }
 
@@ -354,6 +382,9 @@ private struct GroupCard: View {
                     .onExitCommand { isRenaming = false }
                     .onAppear { model.isEditingName = true }
                     .onDisappear { model.isEditingName = false }
+                    .onChange(of: isNameFieldFocused) { _, isFocused in
+                        if isFocused == false { commitRename() }
+                    }
                     .frame(maxWidth: 220)
             }
             else {
@@ -395,6 +426,7 @@ private struct GroupCard: View {
     }
 
     private func commitRename() {
+        guard isRenaming else { return }
         isRenaming = false
         model.renameTask(group, to: draftName)
     }
@@ -411,7 +443,46 @@ private struct SessionRow: View {
     @State private var draftName = ""
     @FocusState private var isNameFieldFocused: Bool
 
+    private static let expandedLineLimit = 4
+    private static let selectionAnimation = Animation.spring(response: 0.34, dampingFraction: 0.86)
+    private static let selectionColor = Color(red: 185 / 255, green: 154 / 255, blue: 1).opacity(28 / 255)
+
     var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            summary
+                .contentShape(Rectangle())
+                .simultaneousGesture(TapGesture().onEnded { withAnimation(Self.selectionAnimation) { model.toggleSelection(session) } })
+            if isSelected {
+                SessionSelectionFooter(session: session, model: model)
+                    .padding(.leading, StateBadge.size + 10)
+                    .padding(.top, 8)
+                    .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: -6)), removal: .opacity))
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 7)
+        .background(rowBackground)
+        .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+        .opacity(isClosing ? 0.45 : 1)
+        .onHover { isHovered = $0 }
+        .animation(Self.selectionAnimation, value: isSelected)
+        .animation(Self.selectionAnimation, value: model.confirmingCloseSessionId)
+        .animation(.easeOut(duration: 0.2), value: isClosing)
+    }
+
+    private var isSelected: Bool { model.selectedSessionId == session.id }
+
+    private var isClosing: Bool { model.closingSessionIds.contains(session.id) }
+
+    private var rowBackground: some View {
+        let shape = RoundedRectangle(cornerRadius: 11, style: .continuous)
+        return ZStack {
+            shape.fill(Color.primary.opacity(isHovered && isSelected == false ? 0.06 : 0))
+            shape.fill(Self.selectionColor).opacity(isSelected ? 1 : 0)
+        }
+    }
+
+    private var summary: some View {
         HStack(alignment: .top, spacing: 10) {
             StateBadge(state: session.state, agent: session.agent)
 
@@ -426,11 +497,20 @@ private struct SessionRow: View {
                         .font(.system(size: 11, design: .rounded).monospacedDigit())
                         .foregroundStyle(.tertiary)
                 }
-                if let detail = detailText {
+                if isClosing {
+                    HStack(spacing: 5) {
+                        ProgressView().controlSize(.mini)
+                        Text("Closing…")
+                    }
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                }
+                else if let detail = detailText {
                     Text(detail)
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
-                        .lineLimit(session.isNeedingUser ? 2 : 1)
+                        .lineLimit(isSelected ? Self.expandedLineLimit : (session.isNeedingUser ? 2 : 1))
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 if session.reviewFiles.isEmpty == false {
                     Label(fileSummary, systemImage: "doc.text")
@@ -442,11 +522,6 @@ private struct SessionRow: View {
 
             actions
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 7)
-        .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Color.primary.opacity(isHovered ? 0.07 : 0)))
-        .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
-        .onHover { isHovered = $0 }
     }
 
     @ViewBuilder
@@ -461,7 +536,7 @@ private struct SessionRow: View {
                 .onAppear { model.isEditingName = true }
                 .onDisappear { model.isEditingName = false }
                 .onChange(of: isNameFieldFocused) { _, isFocused in
-                    if isFocused == false { isRenaming = false }
+                    if isFocused == false { commitRename() }
                 }
                 .padding(.horizontal, 4)
                 .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(Color.primary.opacity(0.08)))
@@ -473,6 +548,11 @@ private struct SessionRow: View {
                 .lineLimit(1)
                 .onTapGesture(count: 2, perform: startRename)
                 .help("Double-click to rename the session")
+                .onChange(of: model.renamingSessionId) { _, sessionId in
+                    guard sessionId == session.id else { return }
+                    model.finishRenameRequest()
+                    startRename()
+                }
         }
     }
 
@@ -483,33 +563,39 @@ private struct SessionRow: View {
     }
 
     private func commitRename() {
+        guard isRenaming else { return }
         isRenaming = false
         model.renameSession(session, to: draftName)
     }
 
     private var actions: some View {
         HStack(spacing: 4) {
-            Button { model.showAgent(session) } label: { Image(systemName: "terminal") }
+            actionButton(.showTerminal, systemImage: "terminal")
                 .disabled(session.hasTerminalTab == false)
                 .help(focusHelp)
-            if let unityPid = session.unityPid {
-                Button { model.showUnityEditor(pid: unityPid) } label: { Image(systemName: "cube") }
+            if session.unityPid != nil {
+                actionButton(.showUnity, systemImage: "cube")
                     .help("Show the \(session.projectName) Unity editor")
             }
             if session.artifactUrl != nil {
-                Button { model.openArtifact(session) } label: { Image(systemName: "globe") }
+                actionButton(.openArtifact, systemImage: "globe")
                     .help("Open the page this agent published")
             }
         }
         .buttonStyle(GlassIconButtonStyle(diameter: 26))
-        .opacity(isHovered || session.isNeedingUser ? 1 : 0.5)
+        .opacity(isHovered || isSelected || session.isNeedingUser ? 1 : 0.5)
+    }
+
+    private func actionButton(_ action: SessionAction, systemImage: String) -> some View {
+        Button { model.perform(action, for: session) } label: { Image(systemName: systemImage) }
+        .overlay(Circle().strokeBorder(Color.accentColor, lineWidth: 2).opacity(isSelected && model.highlightedSessionAction == action ? 1 : 0))
     }
 
     private var detailText: String? {
         if let waitingFor = session.waitingFor, waitingFor.isEmpty == false {
             return waitingFor.prefix(1).uppercased() + waitingFor.dropFirst()
         }
-        return session.lastMessagePreview
+        return session.lastMessageExcerpt ?? session.lastMessagePreview
     }
 
     private var fileSummary: String {
@@ -523,7 +609,92 @@ private struct SessionRow: View {
     }
 }
 
+// MARK: - Selection footer
+
+// Says what Control-X will do, and asks before the last agent of a project takes its editors with it.
+private struct SessionSelectionFooter: View {
+    let session: PanelSession
+    @ObservedObject var model: PanelModel
+
+    var body: some View {
+        if model.confirmingCloseSessionId == session.id {
+            confirmation
+                .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .topLeading)))
+        }
+        else if session.hasTerminalTab {
+            HStack(spacing: 6) {
+                KeyCap(text: "⌃X")
+                Text("Close terminal tab")
+            }
+            .font(.system(size: 10.5))
+            .foregroundStyle(.secondary)
+            .transition(.opacity)
+        }
+    }
+
+    private var confirmation: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Image(systemName: "rectangle.portrait.and.arrow.right")
+                    .foregroundStyle(.orange)
+                Text("Last agent in \(session.projectName). Close \(editorsText) too?")
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .font(.system(size: 11, weight: .medium))
+
+            HStack(spacing: 6) {
+                optionButton("Close All", option: .closeAll)
+                optionButton("Tab Only", option: .tabOnly)
+                Spacer(minLength: 0)
+                optionButton("Cancel", option: .cancel)
+            }
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Color.orange.opacity(0.1)))
+        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(Color.orange.opacity(0.3), lineWidth: 1))
+    }
+
+    private func optionButton(_ title: String, option: CloseConfirmationOption) -> some View {
+        Button(title) { model.choose(option, for: session) }
+        .buttonStyle(FooterButtonStyle(isProminent: model.highlightedCloseOption == option))
+    }
+
+    private var editorsText: String {
+        session.unityPid == nil ? "the Rider window" : "the Rider window and Unity"
+    }
+}
+
+private struct KeyCap: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 9.5, weight: .semibold, design: .rounded))
+            .padding(.horizontal, 4.5)
+            .frame(minWidth: 18, minHeight: 15)
+            .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(Color.primary.opacity(0.08)))
+            .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous).strokeBorder(Color.primary.opacity(0.14), lineWidth: 0.5))
+    }
+}
+
+private struct FooterButtonStyle: ButtonStyle {
+    let isProminent: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 11, weight: .semibold))
+            .padding(.horizontal, 9)
+            .frame(height: 22)
+            .foregroundStyle(isProminent ? Color.white : Color.primary)
+            .background(Capsule().fill(isProminent ? Color.orange : Color.primary.opacity(0.08)))
+            .scaleEffect(configuration.isPressed ? 0.95 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+}
+
 private struct StateBadge: View {
+    static let size: CGFloat = 26
+
     let state: String
     let agent: String?
 
@@ -540,7 +711,7 @@ private struct StateBadge: View {
         Image(systemName: symbol)
             .font(.system(size: 11, weight: .bold))
             .foregroundStyle(.white)
-            .frame(width: 26, height: 26)
+            .frame(width: Self.size, height: Self.size)
             .background(
                 Circle()
                     .fill(LinearGradient(colors: [color.opacity(0.95), color.opacity(0.7)], startPoint: .top, endPoint: .bottom))
@@ -623,20 +794,22 @@ private struct ProjectChip: View {
 
 private extension View {
     func glassSurface(cornerRadius: CGFloat, tint: Color? = nil, isRaised: Bool = false) -> some View {
-        modifier(GlassSurface(shape: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous), tint: tint, isRaised: isRaised, isInteractive: false))
+        modifier(GlassSurface(shape: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous), tint: tint, isRaised: isRaised, isInteractive: false, isRefracting: false))
     }
 
     func glassCircle(isInteractive: Bool = false) -> some View {
-        modifier(GlassSurface(shape: Circle(), tint: nil, isRaised: false, isInteractive: isInteractive))
+        modifier(GlassSurface(shape: Circle(), tint: nil, isRaised: false, isInteractive: isInteractive, isRefracting: true))
     }
 }
 
 // Real Liquid Glass on macOS 26 when built with the Xcode 26+ SDK; a material imitation otherwise.
+// Large cards skip real glass: its edge lensing pulls the panel border and header into them.
 private struct GlassSurface<SurfaceShape: InsettableShape>: ViewModifier {
     let shape: SurfaceShape
     let tint: Color?
     let isRaised: Bool
     let isInteractive: Bool
+    let isRefracting: Bool
 
     func body(content: Content) -> some View {
         surface(content)
@@ -646,7 +819,7 @@ private struct GlassSurface<SurfaceShape: InsettableShape>: ViewModifier {
     @ViewBuilder
     private func surface(_ content: Content) -> some View {
         #if compiler(>=6.2)
-        if #available(macOS 26, *) {
+        if isRefracting, #available(macOS 26, *) {
             content
                 .glassEffect(makeGlass(), in: shape)
                 .overlay(tint.map { shape.strokeBorder($0.opacity(0.7), lineWidth: 1.5) })
@@ -705,74 +878,6 @@ private struct GlassIconButtonStyle: ButtonStyle {
                 .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
                 .onHover { isHovered = $0 }
         }
-    }
-}
-
-// MARK: - Footer
-
-private struct PanelFooter: View {
-    let freeClones: [PanelClone]
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text("FREE")
-                .font(.system(size: 10, weight: .semibold))
-                .tracking(0.7)
-                .foregroundStyle(.secondary)
-                .fixedSize()
-            FlowLayout(spacing: 4) {
-                ForEach(freeClones) { ProjectChip(name: $0.name) }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 16)
-        .padding(.top, 2)
-        .padding(.bottom, 12)
-        .help("Clones open in Rider or Unity with no agent and no local changes")
-    }
-}
-
-private struct FlowLayout: Layout {
-    let spacing: CGFloat
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let rows = arrangeRows(subviews, maxWidth: proposal.width ?? .infinity)
-        let height = rows.map(\.height).reduce(0, +) + spacing * CGFloat(max(rows.count - 1, 0))
-        let width = rows.map(\.width).max() ?? 0
-        return CGSize(width: width, height: height)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        var y = bounds.minY
-        for row in arrangeRows(subviews, maxWidth: bounds.width) {
-            var x = bounds.minX
-            for index in row.indices {
-                let size = subviews[index].sizeThatFits(.unspecified)
-                subviews[index].place(at: CGPoint(x: x, y: y), proposal: .unspecified)
-                x += size.width + spacing
-            }
-            y += row.height + spacing
-        }
-    }
-
-    private func arrangeRows(_ subviews: Subviews, maxWidth: CGFloat) -> [(indices: [Int], width: CGFloat, height: CGFloat)] {
-        var rows: [(indices: [Int], width: CGFloat, height: CGFloat)] = []
-        var current: (indices: [Int], width: CGFloat, height: CGFloat) = ([], 0, 0)
-        for index in subviews.indices {
-            let size = subviews[index].sizeThatFits(.unspecified)
-            let nextWidth = current.indices.isEmpty ? size.width : current.width + spacing + size.width
-            if nextWidth > maxWidth, current.indices.isEmpty == false {
-                rows.append(current)
-                current = ([index], size.width, size.height)
-            }
-            else {
-                current = (current.indices + [index], nextWidth, max(current.height, size.height))
-            }
-        }
-        if current.indices.isEmpty == false {
-            rows.append(current)
-        }
-        return rows
     }
 }
 

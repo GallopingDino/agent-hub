@@ -19,6 +19,7 @@ Nothing in it is tied to Rider. The panel talks to a small CLI, and the CLI talk
 - Reopens a closed project from the IDE's recent list; hold Option to open its Unity Editor too.
 - Shows how much of the 5-hour and weekly limits Claude Code and Codex have left, and wakes sleeping agents with one short request outside any project.
 - Renames sessions, groups them by task or project, opens the last artifact an agent published.
+- Click a session or move with the arrow keys to expand its last answer; Return then opens its terminal tab, Control-X closes it, and for the last agent of a project offers to close the Rider window and Unity Editor too.
 - Global hot key Control-Option-Command-H; while the panel is open, R refreshes, S opens settings, Esc closes.
 
 ## Parts

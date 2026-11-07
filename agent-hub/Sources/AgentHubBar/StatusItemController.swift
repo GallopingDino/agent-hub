@@ -19,9 +19,17 @@ final class StatusItemController: NSObject {
 
     private var subscriptions: Set<AnyCancellable> = []
     private var outsideClickMonitor: Any?
+    private var panelClickMonitor: Any?
     private var escapeHotKey: GlobalHotKey?
     private var refreshHotKey: GlobalHotKey?
     private var settingsHotKey: GlobalHotKey?
+    private var previousSessionHotKey: GlobalHotKey?
+    private var nextSessionHotKey: GlobalHotKey?
+    private var closeSessionHotKey: GlobalHotKey?
+    private var returnHotKey: GlobalHotKey?
+    private var showTerminalHotKey: GlobalHotKey?
+    private var previousChoiceHotKey: GlobalHotKey?
+    private var nextChoiceHotKey: GlobalHotKey?
     private var panelTop: CGFloat = 0
 
     init(model: PanelModel) {
@@ -45,8 +53,28 @@ final class StatusItemController: NSObject {
             .store(in: &subscriptions)
         model.$isEditingName
             .receive(on: RunLoop.main)
-            .sink { [weak self] isEditing in self?.updateLetterHotKeys(isEditingName: isEditing) }
+            .sink { [weak self] isEditing in
+                self?.updateLetterHotKeys(isEditingName: isEditing)
+                self?.updateClosingHotKeys()
+            }
             .store(in: &subscriptions)
+        model.$selectedSessionId.combineLatest(model.$confirmingCloseSessionId)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.updateClosingHotKeys() }
+            .store(in: &subscriptions)
+        panelClickMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
+            self?.finishEditingUnlessClickedInside(event)
+            return event
+        }
+    }
+
+    // A click anywhere else in the panel ends a rename the way Return does.
+    private func finishEditingUnlessClickedInside(_ event: NSEvent) {
+        guard event.window === panel, let editor = panel.firstResponder as? NSTextView, editor.isFieldEditor else { return }
+        let point = editor.convert(event.locationInWindow, from: nil)
+        if editor.bounds.contains(point) == false {
+            panel.makeFirstResponder(nil)
+        }
     }
 
     private func configureStatusButton() {
@@ -70,6 +98,7 @@ final class StatusItemController: NSObject {
         effect.material = .popover
         effect.blendingMode = .behindWindow
         effect.state = .active
+        effect.maskImage = Self.makeCornerMask()
         effect.wantsLayer = true
         effect.layer?.cornerRadius = Self.cornerRadius
         effect.layer?.cornerCurve = .continuous
@@ -88,6 +117,22 @@ final class StatusItemController: NSObject {
         panel.contentView = effect
         NotificationCenter.default.addObserver(self, selector: #selector(panelDidResize), name: NSWindow.didResizeNotification, object: panel)
         NotificationCenter.default.addObserver(self, selector: #selector(applicationDidResignActive), name: NSApplication.didResignActiveNotification, object: nil)
+    }
+
+    // The layer corner radius only clips drawing; the window server needs the mask to round the backdrop blur and shadow.
+    private static func makeCornerMask() -> NSImage {
+        let cap = (cornerRadius * 1.6).rounded(.up)
+        let edge = cap * 2 + 1
+        let image = NSImage(size: NSSize(width: edge, height: edge), flipped: false) { rect in
+            guard let context = NSGraphicsContext.current?.cgContext else { return false }
+            context.addPath(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).path(in: rect).cgPath)
+            context.setFillColor(.black)
+            context.fillPath()
+            return true
+        }
+        image.capInsets = NSEdgeInsets(top: cap, left: cap, bottom: cap, right: cap)
+        image.resizingMode = .stretch
+        return image
     }
 
     @objc func togglePanel() {
@@ -120,12 +165,19 @@ final class StatusItemController: NSObject {
                 if self.model.isSettingsMenuOpen {
                     self.model.closeSettingsMenu()
                 }
+                else if self.model.confirmingCloseSessionId != nil {
+                    self.model.cancelClosing()
+                }
+                else if self.model.selectedSessionId != nil {
+                    self.model.deselectSession()
+                }
                 else {
                     self.hidePanel()
                 }
             }
         }
         updateLetterHotKeys(isEditingName: model.isEditingName)
+        updateClosingHotKeys()
         outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             Task { @MainActor in self?.hidePanel() }
         }
@@ -138,17 +190,20 @@ final class StatusItemController: NSObject {
         model.panelDidClose()
         escapeHotKey = nil
         updateLetterHotKeys(isEditingName: model.isEditingName)
+        updateClosingHotKeys()
         if let outsideClickMonitor {
             NSEvent.removeMonitor(outsideClickMonitor)
         }
         outsideClickMonitor = nil
     }
 
-    // R refreshes and S toggles the settings menu, only while the panel is shown and no name is being typed.
+    // R refreshes, S toggles the settings menu and the arrows move the selection, only while the panel is shown and no name is being typed.
     private func updateLetterHotKeys(isEditingName: Bool) {
         guard panel.isVisible, isEditingName == false else {
             refreshHotKey = nil
             settingsHotKey = nil
+            previousSessionHotKey = nil
+            nextSessionHotKey = nil
             return
         }
         guard refreshHotKey == nil else { return }
@@ -158,6 +213,12 @@ final class StatusItemController: NSObject {
                 guard let model = self?.model else { return }
                 Task { await model.refresh() }
             }
+        }
+        previousSessionHotKey = GlobalHotKey(keyCode: kVK_UpArrow, modifiers: 0) {
+            DispatchQueue.main.async { [weak self] in self?.moveSelection(by: -1) }
+        }
+        nextSessionHotKey = GlobalHotKey(keyCode: kVK_DownArrow, modifiers: 0) {
+            DispatchQueue.main.async { [weak self] in self?.moveSelection(by: 1) }
         }
         settingsHotKey = GlobalHotKey(keyCode: kVK_ANSI_S, modifiers: 0) {
             DispatchQueue.main.async { [weak self] in
@@ -172,6 +233,40 @@ final class StatusItemController: NSObject {
         }
     }
 
+    private func moveSelection(by offset: Int) {
+        withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) { model.selectAdjacentSession(by: offset) }
+    }
+
+    // For the selected agent: Control-X closes its tab, Command-Down shows it, Left and Right move between its buttons or answers, Return activates.
+    private func updateClosingHotKeys() {
+        let isActive = panel.isVisible && model.isEditingName == false && model.selectedSessionId != nil
+        guard isActive else {
+            closeSessionHotKey = nil
+            returnHotKey = nil
+            showTerminalHotKey = nil
+            previousChoiceHotKey = nil
+            nextChoiceHotKey = nil
+            return
+        }
+        guard closeSessionHotKey == nil else { return }
+
+        closeSessionHotKey = GlobalHotKey(keyCode: kVK_ANSI_X, modifiers: controlKey) {
+            DispatchQueue.main.async { [weak self] in self?.model.closeSelectedSession() }
+        }
+        returnHotKey = GlobalHotKey(keyCode: kVK_Return, modifiers: 0) {
+            DispatchQueue.main.async { [weak self] in self?.model.activateSelection() }
+        }
+        showTerminalHotKey = GlobalHotKey(keyCode: kVK_DownArrow, modifiers: cmdKey) {
+            DispatchQueue.main.async { [weak self] in self?.model.showSelectedSessionTerminal() }
+        }
+        previousChoiceHotKey = GlobalHotKey(keyCode: kVK_LeftArrow, modifiers: 0) {
+            DispatchQueue.main.async { [weak self] in self?.model.moveHighlight(by: -1) }
+        }
+        nextChoiceHotKey = GlobalHotKey(keyCode: kVK_RightArrow, modifiers: 0) {
+            DispatchQueue.main.async { [weak self] in self?.model.moveHighlight(by: 1) }
+        }
+    }
+
     // Under the settings button, which sits in the header's top-right corner.
     private func findSettingsMenuPoint() -> NSPoint {
         NSPoint(x: panel.frame.maxX - Self.headerInset - Self.headerButtonDiameter, y: panel.frame.maxY - Self.headerTopPadding - Self.headerButtonDiameter - 4)
@@ -180,6 +275,7 @@ final class StatusItemController: NSObject {
     // The list grows and shrinks with its content; keep the top edge pinned under the icon.
     @objc private func panelDidResize() {
         guard panel.isVisible else { return }
+        panel.invalidateShadow()
         var frame = panel.frame
         guard abs(frame.maxY - panelTop) > 0.5 else { return }
         frame.origin.y = panelTop - frame.height

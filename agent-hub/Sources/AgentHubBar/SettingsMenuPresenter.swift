@@ -58,6 +58,7 @@ final class SettingsMenuPresenter: NSObject {
             wakeUp.isEnabled = model.isWakingUpAgents == false
             menu.addItem(wakeUp)
         }
+        addCloseUnusedItems(to: menu)
         if model.usage.isEmpty {
             menu.addItem(makeInfoItem("Usage is loading…"))
         }
@@ -65,6 +66,23 @@ final class SettingsMenuPresenter: NSObject {
             menu.addItem(makeHeader(agentUsage.agentName))
             menu.addItem(makeInfoItem(agentUsage.summary))
         }
+    }
+
+    private func addCloseUnusedItems(to menu: NSMenu) {
+        let clones = model.unusedClones
+        if clones.count > 1 {
+            menu.addItem(makeCloseUnusedItem("Close All Unused", closing: clones))
+        }
+        for clone in clones {
+            menu.addItem(makeCloseUnusedItem("Close Unused: \(clone.name)", closing: [clone]))
+        }
+    }
+
+    private func makeCloseUnusedItem(_ title: String, closing clones: [PanelClone]) -> NSMenuItem {
+        let item = makeItem(title, #selector(closeUnusedClones(_:)))
+        item.representedObject = clones.map(\.name)
+        item.isEnabled = model.isClosingUnusedClones == false
+        return item
     }
 
     private func makeOpenProjectItem() -> NSMenuItem {
@@ -146,6 +164,11 @@ final class SettingsMenuPresenter: NSObject {
 
     @objc private func wakeUpAgents() {
         model.wakeUpAgents()
+    }
+
+    @objc private func closeUnusedClones(_ sender: NSMenuItem) {
+        guard let names = sender.representedObject as? [String] else { return }
+        model.closeUnusedClones(model.unusedClones.filter { names.contains($0.name) })
     }
 
     @objc private func openProject(_ sender: NSMenuItem) {

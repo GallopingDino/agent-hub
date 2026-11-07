@@ -55,5 +55,6 @@ mkdir -p "$(dirname "$INSTALLED_APP")" "$(dirname "$CLI_LINK")"
 rm -rf "$INSTALLED_APP"
 cp -R "$APP" "$INSTALLED_APP"
 ln -sf "$INSTALLED_APP/Contents/MacOS/agent-hub" "$CLI_LINK"
+open "$INSTALLED_APP"
 
 echo "$INSTALLED_APP"

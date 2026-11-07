@@ -31,6 +31,7 @@ public final class AgentTabsRestorer implements ProjectActivity {
     @Override
     public Object execute(@NotNull Project project, @NotNull Continuation<? super Unit> continuation) {
         ScheduledExecutorService scheduler = AppExecutorUtil.getAppScheduledExecutorService();
+        QuietTabsMarker.startWatching();
         scheduler.schedule(() -> runOnEdt(project, () -> {
             loadTerminalTabs(project);
             scheduler.schedule(() -> {

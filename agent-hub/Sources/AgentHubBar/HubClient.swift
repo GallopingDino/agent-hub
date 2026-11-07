@@ -51,6 +51,14 @@ enum HubClient {
         return reason.isEmpty ? "could not wake up the agents" : reason
     }
 
+    // Returns nil on success, otherwise one line per clone that stayed open.
+    static func closeClones(_ clones: [PanelClone]) async -> String? {
+        let result = await run(["close-clone"] + clones.map(\.name))
+        guard result.output == nil else { return nil }
+        let reason = result.errorText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return reason.isEmpty ? "could not close the unused clones" : reason
+    }
+
     static func showAgent(_ session: PanelSession, isOpeningEditedFiles: Bool) async {
         _ = await run([isOpeningEditedFiles ? "review" : "focus", String(session.pid)]).output
     }
@@ -61,6 +69,14 @@ enum HubClient {
         guard result.output == nil else { return nil }
         let reason = result.errorText.trimmingCharacters(in: .whitespacesAndNewlines)
         return reason.isEmpty ? "cannot rename '\(session.title)': agent-hub failed" : reason
+    }
+
+    // Returns nil on success, otherwise the reason agent-hub gave.
+    static func close(_ session: PanelSession, isClosingProject: Bool) async -> String? {
+        let result = await run(["close", String(session.pid)] + (isClosingProject ? ["--with-project"] : []))
+        guard result.output == nil else { return nil }
+        let reason = result.errorText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return reason.isEmpty ? "could not close '\(session.title)'" : reason
     }
 
     static func openArtifact(_ session: PanelSession) async {

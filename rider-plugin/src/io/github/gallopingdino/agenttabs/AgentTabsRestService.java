@@ -3,6 +3,7 @@ package io.github.gallopingdino.agenttabs;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.project.ProjectManager;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.http.EmptyHttpHeaders;
 import io.netty.handler.codec.http.FullHttpRequest;
@@ -53,7 +54,9 @@ public final class AgentTabsRestService extends RestService {
                 case "open" -> open(urlDecoder);
                 case "open-files" -> openFiles(urlDecoder);
                 case "send-text" -> sendText(urlDecoder);
-                default -> error("unknown action '" + action + "', expected list, focus, open, open-files or send-text");
+                case "close" -> close(urlDecoder);
+                case "close-project" -> closeProject(urlDecoder);
+                default -> error("unknown action '" + action + "', expected list, focus, open, open-files, send-text, close or close-project");
             };
         }
         catch (RuntimeException e) {
@@ -122,6 +125,34 @@ public final class AgentTabsRestService extends RestService {
             builder = builder.shouldExecute();
         builder.send(text);
         return describe(location);
+    }
+
+    private static String close(QueryStringDecoder urlDecoder) {
+        String pid = findParameter(urlDecoder, "pid");
+        if (pid == null)
+            return error("parameter 'pid' is required");
+
+        TerminalTabsUtils.TabLocation location = TerminalTabsUtils.findTabOwningProcess(Long.parseLong(pid));
+        if (location == null)
+            return error("no terminal tab found for pid=" + pid);
+
+        String reply = describe(location);
+        location.tab().getContent().getManager().removeContent(location.tab().getContent(), true);
+        return reply;
+    }
+
+    // Closing may ask about unsaved work, so it runs after the reply instead of holding the request open.
+    private static String closeProject(QueryStringDecoder urlDecoder) {
+        String projectPath = findParameter(urlDecoder, "project");
+        if (projectPath == null)
+            return error("parameter 'project' is required");
+
+        Project project = TerminalTabsUtils.findOpenProject(projectPath);
+        if (project == null)
+            return error("project is not open in Rider: " + projectPath);
+
+        ApplicationManager.getApplication().invokeLater(() -> ProjectManager.getInstance().closeAndDispose(project));
+        return "{\"ok\":true}";
     }
 
     private static String describe(TerminalTabsUtils.TabLocation location) {

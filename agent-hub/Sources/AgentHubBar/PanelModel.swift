@@ -1,6 +1,18 @@
 import AppKit
 import SwiftUI
 
+enum SessionAction {
+    case showTerminal
+    case showUnity
+    case openArtifact
+}
+
+enum CloseConfirmationOption: CaseIterable {
+    case closeAll
+    case tabOnly
+    case cancel
+}
+
 @MainActor
 final class PanelModel: ObservableObject {
     private static let openPanelRefreshSeconds: UInt64 = 10
@@ -24,7 +36,18 @@ final class PanelModel: ObservableObject {
     @Published private(set) var isRefreshing = false
     @Published private(set) var usage: [PanelAgentUsage] = []
     @Published private(set) var recentProjects: [PanelRecentProject] = []
+    @Published var isInactiveExpanded = false
+    @Published private(set) var selectedSessionId: String? {
+        didSet { highlightedSessionAction = nil }
+    }
+    @Published private(set) var highlightedSessionAction: SessionAction?
+    @Published private(set) var renamingSessionId: String?
+    // The last agent of a project asks before its IDE window and Unity editor go too.
+    @Published private(set) var confirmingCloseSessionId: String?
+    @Published private(set) var highlightedCloseOption = CloseConfirmationOption.closeAll
+    @Published private(set) var closingSessionIds: Set<String> = []
     @Published private(set) var isWakingUpAgents = false
+    @Published private(set) var isClosingUnusedClones = false
     // While a name is typed, the panel's letter shortcuts must not swallow the keys.
     @Published var isEditingName = false
 
@@ -42,8 +65,17 @@ final class PanelModel: ObservableObject {
         usage.contains(where: \.isAsleep)
     }
 
+    // Clones still open in Rider or Unity with no agent and no local changes.
+    var unusedClones: [PanelClone] {
+        status?.clones.filter { $0.isRunning && $0.isFree } ?? []
+    }
+
     var isAnyAgentRunningLow: Bool {
         usage.contains(where: \.isRunningLow)
+    }
+
+    var selectedSession: PanelSession? {
+        status?.sessions.first { $0.id == selectedSessionId }
     }
 
     var isSettingsMenuOpen: Bool {
@@ -68,6 +100,7 @@ final class PanelModel: ObservableObject {
 
     func panelDidClose() {
         isPanelOpen = false
+        deselectSession()
         startRefreshLoop()
     }
 
@@ -79,6 +112,10 @@ final class PanelModel: ObservableObject {
         async let freshProjects = HubClient.fetchRecentProjects()
         if let fresh = await freshStatus {
             status = fresh
+            closingSessionIds.formIntersection(fresh.sessions.map(\.id))
+            if selectedSession == nil {
+                deselectSession()
+            }
         }
         if let fresh = await freshUsage {
             usage = fresh
@@ -108,6 +145,16 @@ final class PanelModel: ObservableObject {
         }
     }
 
+    func closeUnusedClones(_ clones: [PanelClone]) {
+        guard isClosingUnusedClones == false, clones.isEmpty == false else { return }
+        isClosingUnusedClones = true
+        Task {
+            showNotice(await HubClient.closeClones(clones))
+            await refresh()
+            isClosingUnusedClones = false
+        }
+    }
+
     // The usage APIs can take a few seconds to report the new window.
     private func waitForAgentsToWake() async {
         for attempt in 0..<Self.wakeUpUsageChecks {
@@ -125,6 +172,155 @@ final class PanelModel: ObservableObject {
         let isOpeningFiles = isOpeningEditedFilesOnFocus
         onLeavingForEditor?()
         Task { await HubClient.showAgent(session, isOpeningEditedFiles: isOpeningFiles) }
+    }
+
+    func toggleSelection(_ session: PanelSession) {
+        confirmingCloseSessionId = nil
+        selectedSessionId = selectedSessionId == session.id ? nil : session.id
+    }
+
+    // Arrow keys walk the rows as the panel shows them; from no selection, either arrow starts at the top.
+    func selectAdjacentSession(by offset: Int) {
+        let visible = groups.filter { $0.isInactive == false || isInactiveExpanded }.flatMap(\.sessions)
+        guard visible.isEmpty == false else { return }
+        let next: Int
+        if let current = visible.firstIndex(where: { $0.id == selectedSessionId }) {
+            next = min(max(current + offset, 0), visible.count - 1)
+        }
+        else {
+            next = 0
+        }
+        confirmingCloseSessionId = nil
+        selectedSessionId = visible[next].id
+    }
+
+    func deselectSession() {
+        selectedSessionId = nil
+        confirmingCloseSessionId = nil
+    }
+
+    func cancelClosing() {
+        confirmingCloseSessionId = nil
+    }
+
+    // Left and Right walk the last-agent answers while asking, otherwise the selected row's buttons; Left past the first button leaves them.
+    func moveHighlight(by offset: Int) {
+        guard let session = selectedSession else { return }
+        if confirmingCloseSessionId == session.id {
+            moveCloseHighlight(by: offset)
+        }
+        else {
+            moveActionHighlight(in: findAvailableActions(for: session), by: offset)
+        }
+    }
+
+    func findAvailableActions(for session: PanelSession) -> [SessionAction] {
+        var actions: [SessionAction] = []
+        if session.hasTerminalTab {
+            actions.append(.showTerminal)
+        }
+        if session.unityPid != nil {
+            actions.append(.showUnity)
+        }
+        if session.artifactUrl != nil {
+            actions.append(.openArtifact)
+        }
+        return actions
+    }
+
+    func perform(_ action: SessionAction, for session: PanelSession) {
+        switch action {
+        case .showTerminal:
+            showAgent(session)
+        case .showUnity:
+            if let unityPid = session.unityPid {
+                showUnityEditor(pid: unityPid)
+            }
+        case .openArtifact:
+            openArtifact(session)
+        }
+    }
+
+    func finishRenameRequest() {
+        renamingSessionId = nil
+    }
+
+    private func moveCloseHighlight(by offset: Int) {
+        let options = CloseConfirmationOption.allCases
+        guard let current = options.firstIndex(of: highlightedCloseOption) else { return }
+        highlightedCloseOption = options[min(max(current + offset, 0), options.count - 1)]
+    }
+
+    private func moveActionHighlight(in actions: [SessionAction], by offset: Int) {
+        guard actions.isEmpty == false else { return }
+        guard let current = highlightedSessionAction.flatMap({ actions.firstIndex(of: $0) }) else {
+            highlightedSessionAction = offset > 0 ? actions[0] : nil
+            return
+        }
+        let next = current + offset
+        highlightedSessionAction = next < 0 ? nil : actions[min(next, actions.count - 1)]
+    }
+
+    func isLastAgentInProject(_ session: PanelSession) -> Bool {
+        let siblings = status?.sessions.filter { $0.hasTerminalTab && $0.projectName == session.projectName && closingSessionIds.contains($0.id) == false } ?? []
+        return siblings.allSatisfy { $0.id == session.id }
+    }
+
+    func closeSelectedSession() {
+        guard let session = selectedSession, session.hasTerminalTab, closingSessionIds.contains(session.id) == false, confirmingCloseSessionId == nil else { return }
+        if isLastAgentInProject(session) {
+            highlightedSessionAction = nil
+            highlightedCloseOption = .closeAll
+            confirmingCloseSessionId = session.id
+        }
+        else {
+            close(session, isClosingProject: false)
+        }
+    }
+
+    func showSelectedSessionTerminal() {
+        guard let session = selectedSession, session.hasTerminalTab else { return }
+        showAgent(session)
+    }
+
+    // Return answers the last-agent question, presses the highlighted button, or starts renaming the session.
+    func activateSelection() {
+        guard let session = selectedSession, isSettingsMenuOpen == false else { return }
+        if confirmingCloseSessionId == session.id {
+            choose(highlightedCloseOption, for: session)
+        }
+        else if let action = highlightedSessionAction {
+            perform(action, for: session)
+        }
+        else {
+            renamingSessionId = session.id
+        }
+    }
+
+    func choose(_ option: CloseConfirmationOption, for session: PanelSession) {
+        switch option {
+        case .closeAll:
+            close(session, isClosingProject: true)
+        case .tabOnly:
+            close(session, isClosingProject: false)
+        case .cancel:
+            cancelClosing()
+        }
+    }
+
+    func close(_ session: PanelSession, isClosingProject: Bool) {
+        confirmingCloseSessionId = nil
+        closingSessionIds.insert(session.id)
+        if selectedSessionId == session.id {
+            selectedSessionId = nil
+        }
+        Task {
+            if let reason = await HubClient.close(session, isClosingProject: isClosingProject) {
+                closingSessionIds.remove(session.id)
+                showNotice(reason)
+            }
+            await refresh()
+        }
     }
 
     func openProject(_ project: PanelRecentProject, isUnityWanted: Bool) {

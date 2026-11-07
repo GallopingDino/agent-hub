@@ -19,6 +19,7 @@ struct PanelSession: Decodable, Identifiable {
     let waitingFor: String?
     let idleSeconds: Int
     let lastMessagePreview: String?
+    let lastMessageExcerpt: String?
     let reviewFiles: [String]
     let artifactUrl: String?
     let hasTerminalTab: Bool

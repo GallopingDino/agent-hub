@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit;
 
 // Asks the agent-hub CLI which agent sessions are running; it knows how to find both Claude Code and Codex sessions.
 final class AgentHubCli {
-    record LiveAgentSession(String agent, long pid, String sessionId, String workingDirectory) {
+    record LiveAgentSession(String agent, long pid, String sessionId, String workingDirectory, String state) {
     }
 
     private static final Path EXECUTABLE = Path.of(System.getProperty("user.home"), ".local", "bin", "agent-hub");
@@ -45,7 +45,7 @@ final class AgentHubCli {
 
             for (JsonElement element : JsonParser.parseString(output).getAsJsonArray()) {
                 JsonObject json = element.getAsJsonObject();
-                sessions.add(new LiveAgentSession(json.get("agent").getAsString(), json.get("pid").getAsLong(), json.get("sessionId").getAsString(), json.get("workingDirectory").getAsString()));
+                sessions.add(new LiveAgentSession(json.get("agent").getAsString(), json.get("pid").getAsLong(), json.get("sessionId").getAsString(), json.get("workingDirectory").getAsString(), json.get("state").getAsString()));
             }
         }
         catch (IOException | InterruptedException | RuntimeException e) {

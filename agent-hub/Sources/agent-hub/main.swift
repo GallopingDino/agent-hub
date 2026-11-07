@@ -14,6 +14,8 @@ usage:
   agent-hub open-artifact <session>  open the last artifact the agent published
   agent-hub focus-unity <session|clone>  bring the clone's Unity editor to the front
   agent-hub rename <session> <new name>  rename a session (Claude Code: types /rename into its tab)
+  agent-hub close <session> [--with-project]  close the agent's terminal tab; with --with-project also its IDE window and Unity editor
+  agent-hub close-clone <clone>...  close the IDE window and Unity editor of clones with no agent and no local changes
   agent-hub projects [--json]     projects the IDEs remember that are closed now, most recent first
   agent-hub open-project <directory> [--with-unity]  open a remembered project in its IDE, and its Unity editor
 
@@ -112,6 +114,35 @@ case "rename":
     let newName = arguments.dropFirst(2).joined(separator: " ").replacingOccurrences(of: "\n", with: " ")
     if let failure = SessionRenamer.rename(session, to: newName) {
         exitWithError("cannot rename '\(session.name ?? session.sessionId)' (\(session.cloneName ?? "no clone")): \(failure)")
+    }
+
+case "close":
+    guard arguments.count >= 2 else { exitWithError(usage) }
+    let query = arguments.dropFirst().filter { $0 != "--with-project" }.joined(separator: " ")
+    guard let session = findSession(query, in: StatusBuilder.buildSessions(config: config)) else { exitWithError("no single session matches '\(query)'") }
+    if let failure = SessionCloser.close(session, isClosingProject: arguments.contains("--with-project")) {
+        exitWithError(failure)
+    }
+
+case "close-clone":
+    guard arguments.count >= 2 else { exitWithError(usage) }
+    let clones = StatusBuilder.build(config: config).clones
+    var failures: [String] = []
+    for name in arguments.dropFirst() {
+        guard let clone = clones.first(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) else {
+            failures.append("no clone named '\(name)'")
+            continue
+        }
+        guard clone.isFree else {
+            failures.append("\(clone.name) is in use: it has an agent or local changes")
+            continue
+        }
+        if let failure = CloneCloser.close(clone) {
+            failures.append(failure)
+        }
+    }
+    if failures.isEmpty == false {
+        exitWithError(failures.joined(separator: "\n"))
     }
 
 case "focus-unity":
