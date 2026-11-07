@@ -313,6 +313,37 @@ struct LowBatteryIcon: View {
     }
 }
 
+// Three dots in a triangle, the way Asana marks a task tracker. Drawn once into a template image, like the battery.
+struct TaskTrackerIcon: View {
+    private static let dotSize: CGFloat = 5.2
+
+    @MainActor private static let image = makeImage()
+
+    var body: some View {
+        Image(nsImage: Self.image)
+            .renderingMode(.template)
+    }
+
+    @MainActor
+    private static func makeImage() -> NSImage {
+        let dots = VStack(spacing: 1.2) {
+            Circle().frame(width: dotSize, height: dotSize)
+            HStack(spacing: 1.6) {
+                Circle().frame(width: dotSize, height: dotSize)
+                Circle().frame(width: dotSize, height: dotSize)
+            }
+        }
+        .frame(width: 16, height: 16)
+        .foregroundStyle(.black)
+
+        let renderer = ImageRenderer(content: dots)
+        renderer.scale = 3
+        let image = renderer.nsImage ?? NSImage()
+        image.isTemplate = true
+        return image
+    }
+}
+
 // Handy's open hand.
 struct FrozenHandyIcon: View {
     var body: some View {
@@ -657,6 +688,10 @@ private struct SessionRow: View {
                 actionButton(.showUnity, systemImage: "cube")
                     .help("Show the \(session.projectName) Unity editor")
             }
+            if let taskCode = session.taskCode {
+                actionButton(.openTask) { TaskTrackerIcon() }
+                    .help("Open \(taskCode) in the task tracker")
+            }
             if session.artifactUrl != nil {
                 actionButton(.openArtifact, systemImage: "globe")
                     .help("Open the page this agent published")
@@ -667,7 +702,11 @@ private struct SessionRow: View {
     }
 
     private func actionButton(_ action: SessionAction, systemImage: String) -> some View {
-        Button { model.perform(action, for: session) } label: { Image(systemName: systemImage) }
+        actionButton(action) { Image(systemName: systemImage) }
+    }
+
+    private func actionButton(_ action: SessionAction, @ViewBuilder label: () -> some View) -> some View {
+        Button(action: { model.perform(action, for: session) }, label: label)
         .overlay(Circle().strokeBorder(Color.accentColor, lineWidth: 2).opacity(isSelected && model.confirmingCloseSessionId != session.id && model.highlightedSessionAction == action ? 1 : 0))
     }
 

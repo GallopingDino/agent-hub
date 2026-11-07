@@ -22,6 +22,7 @@ struct PanelSession: Decodable, Identifiable {
     let lastMessageExcerpt: String?
     let reviewFiles: [String]
     let artifactUrl: String?
+    let taskCode: String?
     let hasTerminalTab: Bool
     let unityPid: Int32?
 

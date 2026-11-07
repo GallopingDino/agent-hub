@@ -44,6 +44,7 @@ final class SettingsMenuPresenter: NSObject {
         let openFiles = makeItem("Open edited files on focus", #selector(toggleOpeningEditedFiles))
         openFiles.state = model.isOpeningEditedFilesOnFocus ? .on : .off
         menu.addItem(openFiles)
+        menu.addItem(makeItem("Task Tracker Link…", #selector(editTaskLinkTemplate)))
 
         menu.addItem(.separator())
         menu.addItem(makeItem("Quit Agent Hub", #selector(quit)))
@@ -239,6 +240,27 @@ final class SettingsMenuPresenter: NSObject {
     @objc private func resetUsage(_ sender: NSMenuItem) {
         guard let agent = sender.representedObject as? String, let agentUsage = model.usage.first(where: { $0.agent == agent }) else { return }
         model.resetUsage(of: agentUsage)
+    }
+
+    // The panel's agents carry task codes such as BR-1566; this link turns one into a page in the tracker.
+    func askForTaskLinkTemplate() {
+        let alert = NSAlert()
+        alert.messageText = "Task Tracker Link"
+        alert.informativeText = "The task buttons open this link with {code} replaced by the agent's task code, such as BR-1566."
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 380, height: 24))
+        field.placeholderString = "https://app.asana.com/0/search?q={code}"
+        field.stringValue = model.taskLinkTemplate
+        alert.accessoryView = field
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+        alert.window.initialFirstResponder = field
+        NSApp.activate()
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        model.taskLinkTemplate = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    @objc private func editTaskLinkTemplate() {
+        askForTaskLinkTemplate()
     }
 
     @objc private func restartHandy() {

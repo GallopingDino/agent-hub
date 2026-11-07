@@ -4,6 +4,7 @@ import SwiftUI
 enum SessionAction {
     case showTerminal
     case showUnity
+    case openTask
     case openArtifact
 }
 
@@ -23,6 +24,10 @@ final class PanelModel: ObservableObject {
 
     private let defaults = UserDefaults.standard
 
+    // A link with {code} where the task code goes, e.g. a task tracker's search page.
+    @Published var taskLinkTemplate: String {
+        didSet { defaults.set(taskLinkTemplate, forKey: "taskLinkTemplate") }
+    }
     @Published var isOpeningEditedFilesOnFocus: Bool {
         didSet { defaults.set(isOpeningEditedFilesOnFocus, forKey: "isOpeningEditedFilesOnFocus") }
     }
@@ -94,6 +99,7 @@ final class PanelModel: ObservableObject {
 
     init() {
         isOpeningEditedFilesOnFocus = defaults.object(forKey: "isOpeningEditedFilesOnFocus") as? Bool ?? true
+        taskLinkTemplate = defaults.string(forKey: "taskLinkTemplate") ?? ""
         groupingMode = GroupingMode(rawValue: defaults.string(forKey: "groupingMode") ?? "") ?? .status
         groupOrderByMode = defaults.dictionary(forKey: "groupOrderByMode") as? [String: [String]] ?? [:]
         startRefreshLoop()
@@ -247,6 +253,9 @@ final class PanelModel: ObservableObject {
         if session.unityPid != nil {
             actions.append(.showUnity)
         }
+        if session.taskCode != nil {
+            actions.append(.openTask)
+        }
         if session.artifactUrl != nil {
             actions.append(.openArtifact)
         }
@@ -261,6 +270,8 @@ final class PanelModel: ObservableObject {
             if let unityPid = session.unityPid {
                 showUnityEditor(pid: unityPid)
             }
+        case .openTask:
+            openTask(session)
         case .openArtifact:
             openArtifact(session)
         }
@@ -358,6 +369,18 @@ final class PanelModel: ObservableObject {
             showNotice(await HubClient.openProject(project, isOpeningUnity: isOpeningUnity))
             await refresh()
         }
+    }
+
+    // Without a link yet, asks for one first.
+    func openTask(_ session: PanelSession) {
+        guard let code = session.taskCode else { return }
+        if taskLinkTemplate.isEmpty {
+            settingsMenu.askForTaskLinkTemplate()
+        }
+        guard taskLinkTemplate.isEmpty == false,
+              let url = URL(string: taskLinkTemplate.replacingOccurrences(of: "{code}", with: code.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? code)) else { return }
+        onLeavingForEditor?()
+        NSWorkspace.shared.open(url)
     }
 
     func openArtifact(_ session: PanelSession) {
