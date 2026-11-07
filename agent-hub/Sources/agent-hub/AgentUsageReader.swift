@@ -21,7 +21,9 @@ enum AgentUsageReader {
         let usage: [AgentUsage]
     }
 
-    private static let maxCacheAgeSeconds: TimeInterval = 60
+    // Limits move slowly, and the Claude usage API refuses repeated requests for minutes.
+    private static let maxCacheAgeSeconds: TimeInterval = 5 * 60
+    private static let unavailableError = "usage unavailable"
     private static let requestTimeoutSeconds: TimeInterval = 5
     private static let codexIdleCheckDelaySeconds: TimeInterval = 1.2
     private static let claudeUsageUrl = URL(string: "https://api.anthropic.com/api/oauth/usage")!
@@ -33,10 +35,8 @@ enum AgentUsageReader {
     static func read(isBypassingCache: Bool) -> [AgentUsage] {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        if isBypassingCache == false,
-           let data = try? Data(contentsOf: cacheFile),
-           let cached = try? decoder.decode(CachedUsage.self, from: data),
-           Date().timeIntervalSince(cached.checkedAt) < maxCacheAgeSeconds {
+        let cached = (try? Data(contentsOf: cacheFile)).flatMap { try? decoder.decode(CachedUsage.self, from: $0) }
+        if isBypassingCache == false, let cached, Date().timeIntervalSince(cached.checkedAt) < maxCacheAgeSeconds {
             return cached.usage
         }
 
@@ -47,13 +47,23 @@ enum AgentUsageReader {
         DispatchQueue.global().async(group: group) { codex = readCodexUsage() }
         group.wait()
 
-        let usage = [claude, codex].compactMap { $0 }
+        let usage = [claude, codex].compactMap { $0 }.map { keepLastAnswer(instead: $0, from: cached) }
         saveCache(CachedUsage(checkedAt: Date(), usage: usage))
         return usage
     }
 
+    // Keeps the last answer for the next read without throwing it away, so a refused request can fall back on it.
     static func forgetCache() {
-        try? FileManager.default.removeItem(at: cacheFile)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let data = try? Data(contentsOf: cacheFile), let cached = try? decoder.decode(CachedUsage.self, from: data) else { return }
+        saveCache(CachedUsage(checkedAt: .distantPast, usage: cached.usage))
+    }
+
+    // A refused or failed request shows the agent's previous numbers rather than an error.
+    private static func keepLastAnswer(instead fresh: AgentUsage, from cached: CachedUsage?) -> AgentUsage {
+        guard fresh.error == unavailableError, let previous = cached?.usage.first(where: { $0.agent == fresh.agent }), previous.error == nil else { return fresh }
+        return previous
     }
 
     private static func readClaudeUsage() -> AgentUsage {
@@ -77,7 +87,7 @@ enum AgentUsageReader {
         done.wait()
 
         guard let body, let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any] else {
-            return AgentUsage(agent: .claude, fiveHour: nil, weekly: nil, resetCount: nil, error: "usage unavailable")
+            return AgentUsage(agent: .claude, fiveHour: nil, weekly: nil, resetCount: nil, error: unavailableError)
         }
         return AgentUsage(agent: .claude, fiveHour: activeWindow(readClaudeWindow(json["five_hour"])), weekly: readClaudeWindow(json["seven_day"]), resetCount: nil, error: nil)
     }
@@ -99,7 +109,7 @@ enum AgentUsageReader {
 
     private static func readCodexUsage() -> AgentUsage {
         guard let client = CodexAppServerClient.connect(), let limits = client.readRateLimits() else {
-            return AgentUsage(agent: .codex, fiveHour: nil, weekly: nil, resetCount: nil, error: "usage unavailable")
+            return AgentUsage(agent: .codex, fiveHour: nil, weekly: nil, resetCount: nil, error: unavailableError)
         }
         let fiveHour = isCodexWindowIdle(limits.fiveHour, client) ? nil : activeWindow(limits.fiveHour)
         return AgentUsage(agent: .codex, fiveHour: fiveHour, weekly: limits.weekly, resetCount: limits.resetCreditIds.count, error: nil)
