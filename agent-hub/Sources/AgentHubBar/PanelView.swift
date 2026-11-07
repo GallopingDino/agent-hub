@@ -226,7 +226,7 @@ private struct SettingsMenu: View {
                     .rotationEffect(.degrees(35))
             }
             else if model.isAnyAgentNearLimit {
-                Image(systemName: "battery.25percent").foregroundStyle(UsageMenuView.nearLimitColor)
+                LowBatteryIcon()
             }
             else {
                 Image(systemName: "slider.horizontal.3")
@@ -242,6 +242,51 @@ private struct SettingsMenu: View {
         if model.unusedClones.isEmpty == false { return "Usage and settings: clones are open with no agent and no local changes" }
         if model.isAnyAgentNearLimit { return "Usage and settings: an agent has used 80% or more of a limit" }
         return "Usage and settings"
+    }
+}
+
+// A short, thick battery with little charge left, standing upright; SF Symbols' battery is long and thin. Drawn once into a
+// template image, so the glass button tints it as one shape the way it tints a symbol.
+private struct LowBatteryIcon: View {
+    private static let bodyWidth: CGFloat = 10.2
+    private static let bodyHeight: CGFloat = 8.5
+    private static let lineWidth: CGFloat = 0.8
+    private static let inset: CGFloat = 2.7
+    private static let chargeShare: CGFloat = 0.25
+    private static let cornerShare: CGFloat = 0.18
+    private static let nubWidth: CGFloat = 1.2
+    private static let nubHeightShare: CGFloat = 0.55
+
+    @MainActor private static let image = makeImage()
+
+    var body: some View {
+        Image(nsImage: Self.image)
+            .renderingMode(.template)
+    }
+
+    @MainActor
+    private static func makeImage() -> NSImage {
+        let battery = HStack(spacing: 1) {
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: bodyHeight * cornerShare, style: .continuous)
+                    .strokeBorder(lineWidth: lineWidth)
+                RoundedRectangle(cornerRadius: 1.2, style: .continuous)
+                    .frame(width: (bodyWidth - inset * 2) * chargeShare, height: bodyHeight - inset * 2)
+                    .padding(.leading, inset)
+            }
+            .frame(width: bodyWidth, height: bodyHeight)
+            RoundedRectangle(cornerRadius: 0.8)
+                .frame(width: nubWidth, height: bodyHeight * nubHeightShare)
+        }
+        .rotationEffect(.degrees(-90))
+        .frame(width: 16, height: 16)
+        .foregroundStyle(.black)
+
+        let renderer = ImageRenderer(content: battery)
+        renderer.scale = 3
+        let image = renderer.nsImage ?? NSImage()
+        image.isTemplate = true
+        return image
     }
 }
 
