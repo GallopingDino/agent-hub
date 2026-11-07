@@ -38,7 +38,7 @@ final class PanelModel: ObservableObject {
     @Published private(set) var recentProjects: [PanelRecentProject] = []
     @Published var isInactiveExpanded = false
     @Published private(set) var selectedSessionId: String? {
-        didSet { highlightedSessionAction = nil }
+        didSet { highlightedSessionAction = selectedSession.flatMap { findAvailableActions(for: $0).first } }
     }
     @Published private(set) var highlightedSessionAction: SessionAction?
     @Published private(set) var renamingSessionId: String?
@@ -203,7 +203,7 @@ final class PanelModel: ObservableObject {
         confirmingCloseSessionId = nil
     }
 
-    // Left and Right walk the last-agent answers while asking, otherwise the selected row's buttons; Left past the first button leaves them.
+    // Left and Right walk the last-agent answers while asking, otherwise the selected row's buttons.
     func moveHighlight(by offset: Int) {
         guard let session = selectedSession else { return }
         if confirmingCloseSessionId == session.id {
@@ -252,13 +252,15 @@ final class PanelModel: ObservableObject {
     }
 
     private func moveActionHighlight(in actions: [SessionAction], by offset: Int) {
-        guard actions.isEmpty == false else { return }
-        guard let current = highlightedSessionAction.flatMap({ actions.firstIndex(of: $0) }) else {
-            highlightedSessionAction = offset > 0 ? actions[0] : nil
+        guard actions.isEmpty == false else {
+            highlightedSessionAction = nil
             return
         }
-        let next = current + offset
-        highlightedSessionAction = next < 0 ? nil : actions[min(next, actions.count - 1)]
+        guard let current = highlightedSessionAction.flatMap({ actions.firstIndex(of: $0) }) else {
+            highlightedSessionAction = actions[0]
+            return
+        }
+        highlightedSessionAction = actions[min(max(current + offset, 0), actions.count - 1)]
     }
 
     func isLastAgentInProject(_ session: PanelSession) -> Bool {
@@ -269,7 +271,6 @@ final class PanelModel: ObservableObject {
     func closeSelectedSession() {
         guard let session = selectedSession, session.hasTerminalTab, closingSessionIds.contains(session.id) == false, confirmingCloseSessionId == nil else { return }
         if isLastAgentInProject(session) {
-            highlightedSessionAction = nil
             highlightedCloseOption = .closeAll
             confirmingCloseSessionId = session.id
         }
@@ -283,7 +284,12 @@ final class PanelModel: ObservableObject {
         showAgent(session)
     }
 
-    // Return answers the last-agent question, presses the highlighted button, or starts renaming the session.
+    func startRenamingSelection() {
+        guard let session = selectedSession, confirmingCloseSessionId == nil else { return }
+        renamingSessionId = session.id
+    }
+
+    // Return answers the last-agent question or presses the highlighted button.
     func activateSelection() {
         guard let session = selectedSession, isSettingsMenuOpen == false else { return }
         if confirmingCloseSessionId == session.id {
@@ -291,9 +297,6 @@ final class PanelModel: ObservableObject {
         }
         else if let action = highlightedSessionAction {
             perform(action, for: session)
-        }
-        else {
-            renamingSessionId = session.id
         }
     }
 

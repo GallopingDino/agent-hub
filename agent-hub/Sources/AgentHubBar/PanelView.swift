@@ -588,7 +588,7 @@ private struct SessionRow: View {
 
     private func actionButton(_ action: SessionAction, systemImage: String) -> some View {
         Button { model.perform(action, for: session) } label: { Image(systemName: systemImage) }
-        .overlay(Circle().strokeBorder(Color.accentColor, lineWidth: 2).opacity(isSelected && model.highlightedSessionAction == action ? 1 : 0))
+        .overlay(Circle().strokeBorder(Color.accentColor, lineWidth: 2).opacity(isSelected && model.confirmingCloseSessionId != session.id && model.highlightedSessionAction == action ? 1 : 0))
     }
 
     private var detailText: String? {
@@ -611,7 +611,7 @@ private struct SessionRow: View {
 
 // MARK: - Selection footer
 
-// Says what Control-X will do, and asks before the last agent of a project takes its editors with it.
+// Says what Control-X and Option-Tab will do, and asks before the last agent of a project takes its editors with it.
 private struct SessionSelectionFooter: View {
     let session: PanelSession
     @ObservedObject var model: PanelModel
@@ -621,10 +621,15 @@ private struct SessionSelectionFooter: View {
             confirmation
                 .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .topLeading)))
         }
-        else if session.hasTerminalTab {
+        else {
             HStack(spacing: 6) {
-                KeyCap(text: "⌃X")
-                Text("Close terminal tab")
+                if session.hasTerminalTab {
+                    KeyCap(text: "⌃X")
+                    Text("Close terminal tab")
+                        .padding(.trailing, 6)
+                }
+                KeyCap(text: "⌥⇥")
+                Text("Rename")
             }
             .font(.system(size: 10.5))
             .foregroundStyle(.secondary)

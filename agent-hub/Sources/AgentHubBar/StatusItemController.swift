@@ -28,6 +28,7 @@ final class StatusItemController: NSObject {
     private var closeSessionHotKey: GlobalHotKey?
     private var returnHotKey: GlobalHotKey?
     private var showTerminalHotKey: GlobalHotKey?
+    private var renameHotKey: GlobalHotKey?
     private var previousChoiceHotKey: GlobalHotKey?
     private var nextChoiceHotKey: GlobalHotKey?
     private var panelTop: CGFloat = 0
@@ -237,13 +238,14 @@ final class StatusItemController: NSObject {
         withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) { model.selectAdjacentSession(by: offset) }
     }
 
-    // For the selected agent: Control-X closes its tab, Command-Down shows it, Left and Right move between its buttons or answers, Return activates.
+    // For the selected agent: Control-X closes its tab, Command-Down shows it, Option-Tab renames it, Left and Right move between its buttons or answers, Return activates.
     private func updateClosingHotKeys() {
         let isActive = panel.isVisible && model.isEditingName == false && model.selectedSessionId != nil
         guard isActive else {
             closeSessionHotKey = nil
             returnHotKey = nil
             showTerminalHotKey = nil
+            renameHotKey = nil
             previousChoiceHotKey = nil
             nextChoiceHotKey = nil
             return
@@ -258,6 +260,9 @@ final class StatusItemController: NSObject {
         }
         showTerminalHotKey = GlobalHotKey(keyCode: kVK_DownArrow, modifiers: cmdKey) {
             DispatchQueue.main.async { [weak self] in self?.model.showSelectedSessionTerminal() }
+        }
+        renameHotKey = GlobalHotKey(keyCode: kVK_Tab, modifiers: optionKey) {
+            DispatchQueue.main.async { [weak self] in self?.model.startRenamingSelection() }
         }
         previousChoiceHotKey = GlobalHotKey(keyCode: kVK_LeftArrow, modifiers: 0) {
             DispatchQueue.main.async { [weak self] in self?.model.moveHighlight(by: -1) }
