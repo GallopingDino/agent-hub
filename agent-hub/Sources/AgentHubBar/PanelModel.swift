@@ -37,6 +37,10 @@ final class PanelModel: ObservableObject {
     @Published private var groupOrderByMode: [String: [String]] {
         didSet { defaults.set(groupOrderByMode, forKey: "groupOrderByMode") }
     }
+    // Session id to the name it had before its first merge, so a merged task can be split again.
+    @Published private var namesBeforeMerge: [String: String] {
+        didSet { defaults.set(namesBeforeMerge, forKey: "namesBeforeMerge") }
+    }
     @Published private(set) var status: PanelStatus?
     @Published private(set) var notice: String?
     @Published private(set) var isRefreshing = false
@@ -108,6 +112,7 @@ final class PanelModel: ObservableObject {
         taskLinkTemplate = defaults.string(forKey: "taskLinkTemplate") ?? ""
         groupingMode = GroupingMode(rawValue: defaults.string(forKey: "groupingMode") ?? "") ?? .status
         groupOrderByMode = defaults.dictionary(forKey: "groupOrderByMode") as? [String: [String]] ?? [:]
+        namesBeforeMerge = defaults.dictionary(forKey: "namesBeforeMerge") as? [String: String] ?? [:]
         startRefreshLoop()
         startHandyCheckLoop()
     }
@@ -476,7 +481,22 @@ final class PanelModel: ObservableObject {
 
     func mergeTask(_ sourceId: String, into target: SessionGroup) {
         guard let source = groups.first(where: { $0.id == sourceId }), source.id != target.id else { return }
+        for session in source.sessions + target.sessions where namesBeforeMerge[session.sessionId] == nil {
+            namesBeforeMerge[session.sessionId] = session.title
+        }
         applyTaskName(target.title, to: source.sessions, replacingGroupId: source.id)
+    }
+
+    func isSplittable(_ group: SessionGroup) -> Bool {
+        Set(group.sessions.map { namesBeforeMerge[$0.sessionId] ?? $0.title }).count > 1
+    }
+
+    func splitTask(_ group: SessionGroup) {
+        let renames = group.sessions.compactMap { session in namesBeforeMerge[session.sessionId].map { (session, $0) } }
+        for (session, _) in renames {
+            namesBeforeMerge[session.sessionId] = nil
+        }
+        renameSessions(renames.filter { session, name in name != session.title })
     }
 
     func resetGroupOrder() {
@@ -485,10 +505,13 @@ final class PanelModel: ObservableObject {
 
     private func applyTaskName(_ name: String, to sessions: [PanelSession], replacingGroupId: String) {
         replaceSavedGroupId(replacingGroupId, with: name.lowercased())
+        renameSessions(sessions.map { ($0, name) })
+    }
 
+    private func renameSessions(_ renames: [(session: PanelSession, name: String)]) {
         Task {
             var failures: [String] = []
-            for session in sessions {
+            for (session, name) in renames {
                 if let reason = await HubClient.rename(session, to: name) {
                     failures.append(reason)
                 }

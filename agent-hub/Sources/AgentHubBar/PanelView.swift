@@ -518,6 +518,9 @@ private struct GroupCard: View {
     private var contextMenu: some View {
         if model.groupingMode == .task {
             Button("Rename…", action: startRename)
+            if model.isSplittable(group) {
+                Button("Split") { model.splitTask(group) }
+            }
             Divider()
         }
         Button("Move to top") { model.moveGroup(group.id, by: -1000) }
