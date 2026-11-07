@@ -27,6 +27,7 @@ final class StatusItemController: NSObject {
     private var nextSessionHotKey: GlobalHotKey?
     private var closeSessionHotKey: GlobalHotKey?
     private var returnHotKey: GlobalHotKey?
+    private var spaceHotKey: GlobalHotKey?
     private var showTerminalHotKey: GlobalHotKey?
     private var renameHotKey: GlobalHotKey?
     private var previousChoiceHotKey: GlobalHotKey?
@@ -63,8 +64,9 @@ final class StatusItemController: NSObject {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.updateStatusButton() }
             .store(in: &subscriptions)
+        // The main queue, unlike RunLoop.main, also runs while a modal dialog asks for text.
         model.$isEditingName
-            .receive(on: RunLoop.main)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] isEditing in
                 self?.updateLetterHotKeys(isEditingName: isEditing)
                 self?.updateClosingHotKeys()
@@ -258,12 +260,13 @@ final class StatusItemController: NSObject {
         withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) { model.selectAdjacentSession(by: offset) }
     }
 
-    // For the selected agent: Control-X closes its tab, Command-Down shows it, Option-Tab renames it, Left and Right move between its buttons or answers, Return activates.
+    // For the selected agent: Control-X closes its tab, Command-Down shows it, Option-Tab renames it, Left and Right move between its buttons or answers, Return or Space activates.
     private func updateClosingHotKeys() {
         let isActive = panel.isVisible && model.isEditingName == false && model.isSettingsMenuOpen == false && model.selectedSessionId != nil
         guard isActive else {
             closeSessionHotKey = nil
             returnHotKey = nil
+            spaceHotKey = nil
             showTerminalHotKey = nil
             renameHotKey = nil
             previousChoiceHotKey = nil
@@ -276,6 +279,9 @@ final class StatusItemController: NSObject {
             DispatchQueue.main.async { [weak self] in self?.model.closeSelectedSession() }
         }
         returnHotKey = GlobalHotKey(keyCode: kVK_Return, modifiers: 0) {
+            DispatchQueue.main.async { [weak self] in self?.model.activateSelection() }
+        }
+        spaceHotKey = GlobalHotKey(keyCode: kVK_Space, modifiers: 0) {
             DispatchQueue.main.async { [weak self] in self?.model.activateSelection() }
         }
         showTerminalHotKey = GlobalHotKey(keyCode: kVK_DownArrow, modifiers: cmdKey) {

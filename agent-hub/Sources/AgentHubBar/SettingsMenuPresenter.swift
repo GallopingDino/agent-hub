@@ -254,6 +254,9 @@ final class SettingsMenuPresenter: NSObject {
         alert.addButton(withTitle: "Save")
         alert.addButton(withTitle: "Cancel")
         alert.window.initialFirstResponder = field
+        // The panel's Return and Space keys would otherwise swallow typing in the field.
+        model.isEditingName = true
+        defer { model.isEditingName = false }
         NSApp.activate()
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         model.taskLinkTemplate = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)

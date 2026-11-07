@@ -22,7 +22,7 @@ Nothing in it is tied to Rider. The panel talks to a small CLI, and the CLI talk
 - Opens the tracker task an agent works on. Agents report their task codes and links through the `agent-hub-report-task` skill; the link pattern for a bare code is set in the settings menu.
 - Renames sessions, groups them by task or project, opens the last artifact an agent published. In task mode, drop one task on another to merge them; Split in the task's context menu undoes it.
 - Notices when the Handy speech-to-text app freezes and restarts it.
-- Click a session or move with the arrow keys to expand its last answer. Left and Right pick one of its buttons and Return presses it; Command-Down opens the terminal tab, Option-Tab renames, Control-X closes the agent, and for the last agent of a project offers to close the Rider window and Unity Editor too.
+- Click a session or move with the arrow keys to expand its last answer. Left and Right pick one of its buttons and Return or Space presses it; Command-Down opens the terminal tab, Option-Tab renames, Control-X closes the agent, and for the last agent of a project offers to close the Rider window and Unity Editor too.
 - Global hot key Control-Option-Command-H; while the panel is open, R refreshes, S opens settings, Esc closes.
 
 ## Parts
