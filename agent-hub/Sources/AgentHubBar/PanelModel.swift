@@ -19,6 +19,7 @@ final class PanelModel: ObservableObject {
     private static let closedPanelRefreshSeconds: UInt64 = 120
     private static let wakeUpUsageChecks = 6
     private static let wakeUpUsageCheckIntervalSeconds = 5
+    private static let handyCheckIntervalSeconds = 5
 
     private let defaults = UserDefaults.standard
 
@@ -48,11 +49,15 @@ final class PanelModel: ObservableObject {
     @Published private(set) var closingSessionIds: Set<String> = []
     @Published private(set) var isWakingUpAgents = false
     @Published private(set) var isClosingUnusedClones = false
+    @Published private(set) var isHandyRunning = false
+    @Published private(set) var isHandyFrozen = false
+    @Published private(set) var isRestartingHandy = false
     // While a name is typed, the panel's letter shortcuts must not swallow the keys.
     @Published var isEditingName = false
 
     private var isPanelOpen = false
     private var refreshLoop: Task<Void, Never>?
+    private var handyCheckLoop: Task<Void, Never>?
     private lazy var settingsMenu = SettingsMenuPresenter(model: self)
 
     var onLeavingForEditor: (() -> Void)?
@@ -92,6 +97,7 @@ final class PanelModel: ObservableObject {
         groupingMode = GroupingMode(rawValue: defaults.string(forKey: "groupingMode") ?? "") ?? .status
         groupOrderByMode = defaults.dictionary(forKey: "groupOrderByMode") as? [String: [String]] ?? [:]
         startRefreshLoop()
+        startHandyCheckLoop()
     }
 
     func panelDidOpen() {
@@ -149,6 +155,16 @@ final class PanelModel: ObservableObject {
             showNotice(await HubClient.closeClones(clones))
             await refresh()
             isClosingUnusedClones = false
+        }
+    }
+
+    func restartHandy() {
+        guard isRestartingHandy == false else { return }
+        isRestartingHandy = true
+        Task {
+            showNotice(await HandyApp.restart())
+            checkHandy()
+            isRestartingHandy = false
         }
     }
 
@@ -440,6 +456,27 @@ final class PanelModel: ObservableObject {
     private func saveGroupOrder(_ visibleOrder: [String]) {
         let hidden = readGroupOrder().filter { visibleOrder.contains($0) == false }
         groupOrderByMode[groupingMode.rawValue] = visibleOrder + hidden
+    }
+
+    // Apart from the agents' refresh, which slows down while the panel is closed: the menu bar icon flags a frozen Handy.
+    private func startHandyCheckLoop() {
+        handyCheckLoop = Task { [weak self] in
+            while Task.isCancelled == false {
+                self?.checkHandy()
+                try? await Task.sleep(for: .seconds(Self.handyCheckIntervalSeconds))
+            }
+        }
+    }
+
+    private func checkHandy() {
+        let isRunning = HandyApp.isRunning
+        let isFrozen = isRunning && HandyApp.isFrozen()
+        if isHandyRunning != isRunning {
+            isHandyRunning = isRunning
+        }
+        if isHandyFrozen != isFrozen {
+            isHandyFrozen = isFrozen
+        }
     }
 
     private func startRefreshLoop() {

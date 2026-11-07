@@ -59,6 +59,10 @@ final class StatusItemController: NSObject {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.updateStatusButton() }
             .store(in: &subscriptions)
+        model.$isHandyFrozen
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.updateStatusButton() }
+            .store(in: &subscriptions)
         model.$isEditingName
             .receive(on: RunLoop.main)
             .sink { [weak self] isEditing in
@@ -96,7 +100,7 @@ final class StatusItemController: NSObject {
     private func updateStatusButton() {
         guard let button = statusItem.button else { return }
         let count = model.attentionCount
-        button.image = MenuBarIcon.make(hasAttention: count > 0 || model.isAnyAgentAsleep)
+        button.image = MenuBarIcon.make(hasAttention: count > 0 || model.isAnyAgentAsleep || model.isHandyFrozen)
         button.title = count > 0 ? " \(count)" : ""
         button.font = NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
     }

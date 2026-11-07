@@ -21,6 +21,7 @@ final class SettingsMenuPresenter: NSObject {
     func show(at point: NSPoint?) {
         let menu = NSMenu()
         addUsageItems(to: menu)
+        addRestartHandyItems(to: menu)
         addWakeUpItems(to: menu)
         addCloseUnusedItems(to: menu)
         menu.addItem(.separator())
@@ -62,6 +63,16 @@ final class SettingsMenuPresenter: NSObject {
             menu.addItem(makeHeader(agentUsage.agentName))
             menu.addItem(makeInfoItem(agentUsage.summary))
         }
+    }
+
+    // Offered whenever Handy runs, since a hang the log does not show is possible too; flagged when one is seen.
+    private func addRestartHandyItems(to menu: NSMenu) {
+        guard model.isHandyRunning else { return }
+        menu.addItem(.separator())
+        let restart = makeItem(model.isHandyFrozen ? "Restart Handy (frozen)" : "Restart Handy", #selector(restartHandy))
+        restart.isEnabled = model.isRestartingHandy == false
+        restart.image = NSImage(systemSymbolName: "hand.raised.slash", accessibilityDescription: nil)
+        menu.addItem(restart)
     }
 
     private func addWakeUpItems(to menu: NSMenu) {
@@ -196,6 +207,10 @@ final class SettingsMenuPresenter: NSObject {
     }
 
     @objc private func closeMenu() {
+    }
+
+    @objc private func restartHandy() {
+        model.restartHandy()
     }
 
     @objc private func wakeUpAgents() {

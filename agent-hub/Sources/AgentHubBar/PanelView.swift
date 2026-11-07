@@ -210,8 +210,11 @@ private struct SettingsMenu: View {
         Button {
             model.showSettingsMenu()
         } label: {
-            if model.isWakingUpAgents || model.isClosingUnusedClones {
+            if model.isWakingUpAgents || model.isClosingUnusedClones || model.isRestartingHandy {
                 ProgressView().controlSize(.small).scaleEffect(0.7)
+            }
+            else if model.isHandyFrozen {
+                Image(systemName: "hand.raised.slash")
             }
             else if model.isAnyAgentAsleep {
                 Image(systemName: "moon.zzz")
@@ -234,6 +237,7 @@ private struct SettingsMenu: View {
     }
 
     private var helpText: String {
+        if model.isHandyFrozen { return "Usage and settings: Handy hangs while starting to record" }
         if model.isAnyAgentAsleep { return "Usage and settings: an agent has no 5-hour session" }
         if model.unusedClones.isEmpty == false { return "Usage and settings: clones are open with no agent and no local changes" }
         if model.isAnyAgentRunningLow { return "Usage and settings: an agent has less than 20% of its 5-hour limit left" }
