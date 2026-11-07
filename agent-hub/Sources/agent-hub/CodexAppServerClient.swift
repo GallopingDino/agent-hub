@@ -23,6 +23,8 @@ struct CodexThread {
 // Speaks JSON-RPC to the Codex app-server daemon, which owns every interactive Codex session; the socket expects WebSocket framing.
 final class CodexAppServerClient {
     private static let timeoutSeconds = 2
+    // Spending a reset goes through OpenAI's servers and takes several seconds.
+    private static let resetTimeoutSeconds = 30
 
     private let socket: Int32
 
@@ -87,8 +89,20 @@ final class CodexAppServerClient {
         return CodexRateLimits(fiveHour: readRateLimitWindow(limits["primary"]), weekly: readRateLimitWindow(limits["secondary"]), resetCreditIds: readAvailableResetCreditIds(result["rateLimitResetCredits"]))
     }
 
+    // An answer that never arrives does not mean the reset failed, so the credit list has the final say.
     func consumeResetCredit(_ creditId: String) -> Bool {
-        call("account/rateLimitResetCredit/consume", ["creditId": creditId, "idempotencyKey": UUID().uuidString]) != nil
+        setReceiveTimeout(Self.resetTimeoutSeconds)
+        defer { setReceiveTimeout(Self.timeoutSeconds) }
+        if call("account/rateLimitResetCredit/consume", ["creditId": creditId, "idempotencyKey": UUID().uuidString]) != nil {
+            return true
+        }
+        guard let limits = readRateLimits() else { return false }
+        return limits.resetCreditIds.contains(creditId) == false
+    }
+
+    private func setReceiveTimeout(_ seconds: Int) {
+        var timeout = timeval(tv_sec: seconds, tv_usec: 0)
+        setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
     }
 
     private func readAvailableResetCreditIds(_ value: Any?) -> [String] {
