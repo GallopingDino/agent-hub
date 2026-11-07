@@ -226,7 +226,7 @@ private struct SettingsMenu: View {
                     .rotationEffect(.degrees(35))
             }
             else if model.isAnyAgentNearLimit {
-                LowBatteryIcon()
+                LowBatteryIcon(placement: .button)
             }
             else {
                 Image(systemName: "slider.horizontal.3")
@@ -248,24 +248,47 @@ private struct SettingsMenu: View {
 // A short, thick battery with little charge left, standing upright; SF Symbols' battery is long and thin. Drawn once into a
 // template image, so the glass button tints it as one shape the way it tints a symbol.
 struct LowBatteryIcon: View {
-    private static let bodyWidth: CGFloat = 10.2
+    // The glass button suits a hairline; next to menu text the battery needs more weight and length.
+    enum Placement {
+        case button
+        case menu
+
+        var lineWidth: CGFloat {
+            switch self {
+            case .button: return 0.8
+            case .menu: return 1.3
+            }
+        }
+
+        var bodyWidth: CGFloat {
+            switch self {
+            case .button: return 10.2
+            case .menu: return 10.7
+            }
+        }
+    }
+
     private static let bodyHeight: CGFloat = 8.5
-    private static let lineWidth: CGFloat = 0.8
     private static let inset: CGFloat = 2.7
     private static let chargeShare: CGFloat = 0.25
     private static let cornerShare: CGFloat = 0.18
     private static let nubWidth: CGFloat = 1.2
     private static let nubHeightShare: CGFloat = 0.55
 
-    @MainActor private static let image = makeImage()
+    @MainActor private static let buttonImage = makeImage(for: .button)
+    @MainActor private static let menuImage = makeImage(for: .menu)
+
+    let placement: Placement
 
     var body: some View {
-        Image(nsImage: Self.image)
+        Image(nsImage: placement == .button ? Self.buttonImage : Self.menuImage)
             .renderingMode(.template)
     }
 
     @MainActor
-    private static func makeImage() -> NSImage {
+    private static func makeImage(for placement: Placement) -> NSImage {
+        let bodyWidth = placement.bodyWidth
+        let lineWidth = placement.lineWidth
         let battery = HStack(spacing: 1) {
             ZStack(alignment: .leading) {
                 RoundedRectangle(cornerRadius: bodyHeight * cornerShare, style: .continuous)

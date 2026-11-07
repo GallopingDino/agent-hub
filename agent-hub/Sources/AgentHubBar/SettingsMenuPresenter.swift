@@ -95,7 +95,7 @@ final class SettingsMenuPresenter: NSObject {
             item.isEnabled = model.isResettingUsage == false
             return item
         }
-        items.first?.image = makeTemplateImage(of: LowBatteryIcon())
+        items.first?.image = makeTemplateImage(of: LowBatteryIcon(placement: .menu))
         items.forEach(menu.addItem)
     }
 
