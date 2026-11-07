@@ -10,6 +10,8 @@ struct AgentUsage: Codable {
     // Nil when no 5-hour window is running: the agent is asleep until its next request.
     let fiveHour: UsageWindow?
     let weekly: UsageWindow?
+    // Free resets of both windows the account may spend; nil for an agent that has none.
+    let resetCount: Int?
     let error: String?
 }
 
@@ -55,7 +57,7 @@ enum AgentUsageReader {
     }
 
     private static func readClaudeUsage() -> AgentUsage {
-        guard let token = readClaudeAccessToken() else { return AgentUsage(agent: .claude, fiveHour: nil, weekly: nil, error: "not signed in") }
+        guard let token = readClaudeAccessToken() else { return AgentUsage(agent: .claude, fiveHour: nil, weekly: nil, resetCount: nil, error: "not signed in") }
 
         var request = URLRequest(url: claudeUsageUrl, timeoutInterval: requestTimeoutSeconds)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -75,9 +77,9 @@ enum AgentUsageReader {
         done.wait()
 
         guard let body, let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any] else {
-            return AgentUsage(agent: .claude, fiveHour: nil, weekly: nil, error: "usage unavailable")
+            return AgentUsage(agent: .claude, fiveHour: nil, weekly: nil, resetCount: nil, error: "usage unavailable")
         }
-        return AgentUsage(agent: .claude, fiveHour: activeWindow(readClaudeWindow(json["five_hour"])), weekly: readClaudeWindow(json["seven_day"]), error: nil)
+        return AgentUsage(agent: .claude, fiveHour: activeWindow(readClaudeWindow(json["five_hour"])), weekly: readClaudeWindow(json["seven_day"]), resetCount: nil, error: nil)
     }
 
     private static func readClaudeAccessToken() -> String? {
@@ -97,10 +99,10 @@ enum AgentUsageReader {
 
     private static func readCodexUsage() -> AgentUsage {
         guard let client = CodexAppServerClient.connect(), let limits = client.readRateLimits() else {
-            return AgentUsage(agent: .codex, fiveHour: nil, weekly: nil, error: "usage unavailable")
+            return AgentUsage(agent: .codex, fiveHour: nil, weekly: nil, resetCount: nil, error: "usage unavailable")
         }
         let fiveHour = isCodexWindowIdle(limits.fiveHour, client) ? nil : activeWindow(limits.fiveHour)
-        return AgentUsage(agent: .codex, fiveHour: fiveHour, weekly: limits.weekly, error: nil)
+        return AgentUsage(agent: .codex, fiveHour: fiveHour, weekly: limits.weekly, resetCount: limits.resetCreditIds.count, error: nil)
     }
 
     // With no window running, Codex reports an unused window that resets 5 hours from the moment of asking, so its reset time moves.

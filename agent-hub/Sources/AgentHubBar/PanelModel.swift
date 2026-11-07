@@ -51,6 +51,7 @@ final class PanelModel: ObservableObject {
     @Published private(set) var isClosingUnusedClones = false
     @Published private(set) var isHandyFrozen = false
     @Published private(set) var isRestartingHandy = false
+    @Published private(set) var isResettingUsage = false
     // While a name is typed, the panel's letter shortcuts must not swallow the keys.
     @Published var isEditingName = false
 
@@ -164,6 +165,18 @@ final class PanelModel: ObservableObject {
             showNotice(await HandyApp.restart())
             checkHandy()
             isRestartingHandy = false
+        }
+    }
+
+    func resetUsage(of agentUsage: PanelAgentUsage) {
+        guard isResettingUsage == false else { return }
+        isResettingUsage = true
+        Task {
+            showNotice(await HubClient.resetUsage(of: agentUsage))
+            if let fresh = await HubClient.fetchUsage(isBypassingCache: true) {
+                usage = fresh
+            }
+            isResettingUsage = false
         }
     }
 

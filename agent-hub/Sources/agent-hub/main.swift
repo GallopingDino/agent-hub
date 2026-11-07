@@ -8,6 +8,7 @@ usage:
   agent-hub sessions --json       live agent sessions only, without Rider tabs (used by the Rider plugin)
   agent-hub usage [--json] [--fresh]  5-hour and weekly limits of Claude Code and Codex (cached for a minute)
   agent-hub wake-up               start a 5-hour window for each agent with one short request outside any project
+  agent-hub reset-usage codex     spend one of Codex's free resets of its 5-hour and weekly limits
   agent-hub focus <session>       show the agent's terminal tab in Rider
   agent-hub open-files <session>  open the agent's still-changed code files in Rider (no prefabs/scenes/assets)
   agent-hub review <session>      open-files, then focus
@@ -77,6 +78,12 @@ case "usage":
     else {
         print(UsageTextRenderer.render(usage))
     }
+
+case "reset-usage":
+    guard arguments.count == 2, arguments[1] == AgentKind.codex.rawValue else { exitWithError("only Codex has usage resets: agent-hub reset-usage codex") }
+    guard let client = CodexAppServerClient.connect(), let limits = client.readRateLimits() else { exitWithError("cannot reach the Codex app-server") }
+    guard let creditId = limits.resetCreditIds.first else { exitWithError("Codex has no resets left") }
+    guard client.consumeResetCredit(creditId) else { exitWithError("Codex refused the reset") }
 
 case "wake-up":
     let failures = AgentWaker.wakeUpAgents()

@@ -59,6 +59,14 @@ enum HubClient {
         return reason.isEmpty ? "could not close the unused clones" : reason
     }
 
+    // Returns nil on success, otherwise the reason agent-hub gave.
+    static func resetUsage(of agentUsage: PanelAgentUsage) async -> String? {
+        let result = await run(["reset-usage", agentUsage.agent])
+        guard result.output == nil else { return nil }
+        let reason = result.errorText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return reason.isEmpty ? "could not reset \(agentUsage.agentName) usage" : reason
+    }
+
     static func showAgent(_ session: PanelSession, isOpeningEditedFiles: Bool) async {
         _ = await run([isOpeningEditedFiles ? "review" : "focus", String(session.pid)]).output
     }

@@ -22,6 +22,7 @@ final class SettingsMenuPresenter: NSObject {
         let menu = NSMenu()
         addUsageItems(to: menu)
         addRestartHandyItems(to: menu)
+        addResetUsageItems(to: menu)
         addWakeUpItems(to: menu)
         addCloseUnusedItems(to: menu)
         menu.addItem(.separator())
@@ -81,6 +82,21 @@ final class SettingsMenuPresenter: NSObject {
         restart.isEnabled = model.isRestartingHandy == false
         restart.image = makeTemplateImage(of: FrozenHandyIcon())
         menu.addItem(restart)
+    }
+
+    // Only for an agent near a limit that still has a free reset to spend.
+    private func addResetUsageItems(to menu: NSMenu) {
+        let resettable = model.usage.filter { $0.isNearLimit && ($0.resetCount ?? 0) > 0 }
+        guard resettable.isEmpty == false else { return }
+        menu.addItem(.separator())
+        let items = resettable.map { agentUsage in
+            let item = makeItem("Reset \(agentUsage.agentName) Usage (\(agentUsage.resetCount ?? 0) left)", #selector(resetUsage(_:)))
+            item.representedObject = agentUsage.agent
+            item.isEnabled = model.isResettingUsage == false
+            return item
+        }
+        items.first?.image = makeTemplateImage(of: LowBatteryIcon())
+        items.forEach(menu.addItem)
     }
 
     private func addWakeUpItems(to menu: NSMenu) {
@@ -218,6 +234,11 @@ final class SettingsMenuPresenter: NSObject {
     }
 
     @objc private func closeMenu() {
+    }
+
+    @objc private func resetUsage(_ sender: NSMenuItem) {
+        guard let agent = sender.representedObject as? String, let agentUsage = model.usage.first(where: { $0.agent == agent }) else { return }
+        model.resetUsage(of: agentUsage)
     }
 
     @objc private func restartHandy() {

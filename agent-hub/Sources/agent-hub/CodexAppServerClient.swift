@@ -3,6 +3,8 @@ import Foundation
 struct CodexRateLimits {
     let fiveHour: UsageWindow?
     let weekly: UsageWindow?
+    // Available full resets, the one that expires first first.
+    let resetCreditIds: [String]
 }
 
 struct CodexThread {
@@ -82,7 +84,19 @@ final class CodexAppServerClient {
 
     func readRateLimits() -> CodexRateLimits? {
         guard let result = call("account/rateLimits/read", [:]), let limits = result["rateLimits"] as? [String: Any] else { return nil }
-        return CodexRateLimits(fiveHour: readRateLimitWindow(limits["primary"]), weekly: readRateLimitWindow(limits["secondary"]))
+        return CodexRateLimits(fiveHour: readRateLimitWindow(limits["primary"]), weekly: readRateLimitWindow(limits["secondary"]), resetCreditIds: readAvailableResetCreditIds(result["rateLimitResetCredits"]))
+    }
+
+    func consumeResetCredit(_ creditId: String) -> Bool {
+        call("account/rateLimitResetCredit/consume", ["creditId": creditId, "idempotencyKey": UUID().uuidString]) != nil
+    }
+
+    private func readAvailableResetCreditIds(_ value: Any?) -> [String] {
+        let credits = (value as? [String: Any])?["credits"] as? [[String: Any]] ?? []
+        return credits
+            .filter { $0["status"] as? String == "available" }
+            .sorted { (($0["expiresAt"] as? NSNumber)?.doubleValue ?? .infinity) < (($1["expiresAt"] as? NSNumber)?.doubleValue ?? .infinity) }
+            .compactMap { $0["id"] as? String }
     }
 
     private func readRateLimitWindow(_ value: Any?) -> UsageWindow? {

@@ -64,6 +64,7 @@ struct PanelAgentUsage: Decodable {
     let agent: String
     let fiveHour: PanelUsageWindow?
     let weekly: PanelUsageWindow?
+    let resetCount: Int?
     let error: String?
 
     // No 5-hour window is running, so the next request starts one.

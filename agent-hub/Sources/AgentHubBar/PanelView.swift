@@ -210,7 +210,7 @@ private struct SettingsMenu: View {
         Button {
             model.showSettingsMenu()
         } label: {
-            if model.isWakingUpAgents || model.isClosingUnusedClones || model.isRestartingHandy {
+            if model.isWakingUpAgents || model.isClosingUnusedClones || model.isRestartingHandy || model.isResettingUsage {
                 ProgressView().controlSize(.small).scaleEffect(0.7)
             }
             else if model.isHandyFrozen {
@@ -247,7 +247,7 @@ private struct SettingsMenu: View {
 
 // A short, thick battery with little charge left, standing upright; SF Symbols' battery is long and thin. Drawn once into a
 // template image, so the glass button tints it as one shape the way it tints a symbol.
-private struct LowBatteryIcon: View {
+struct LowBatteryIcon: View {
     private static let bodyWidth: CGFloat = 10.2
     private static let bodyHeight: CGFloat = 8.5
     private static let lineWidth: CGFloat = 0.8
