@@ -55,7 +55,7 @@ enum StatusBuilder {
     }
 
     private static func buildClones(_ clonePaths: [String], sessions: [AgentSession], processTable: ProcessTable) -> [CloneState] {
-        let riderProjects = RiderRecentProjects.readOpenProjectPaths()
+        let openIdeProjects = IdeIntegrations.readOpenProjectDirectories()
         var worktreeCache = WorktreeChangesCache()
         let clones = clonePaths.map { path in
             let sessionCount = sessions.filter { $0.clonePath == path }.count
@@ -69,7 +69,7 @@ enum StatusBuilder {
                 stagedCount: stagedCount,
                 changedCount: changedCount,
                 unityPid: processTable.unityEditorPidByProject[path],
-                isOpenInRider: riderProjects.contains(path),
+                isOpenInRider: openIdeProjects.contains(path),
                 sessionCount: sessionCount,
                 isFree: isFreeCandidate && changedCount == 0
             )

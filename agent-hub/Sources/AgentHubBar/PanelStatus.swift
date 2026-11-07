@@ -89,3 +89,37 @@ struct PanelUsageWindow: Decodable {
 
     var percentLeft: Int { max(0, 100 - usedPercent) }
 }
+
+// Mirrors the `agent-hub projects --json` contract.
+struct PanelRecentProject: Decodable, Identifiable {
+    let name: String
+    let directory: String
+    let ide: String
+    let unity: PanelUnityProject?
+
+    var id: String { directory }
+
+    // Holding Option adds Unity only where that changes what opens.
+    var canChooseUnity: Bool { unity.map { $0.isInstalled && $0.isRunning == false } ?? false }
+
+    var parentFolderName: String { ((directory as NSString).deletingLastPathComponent as NSString).lastPathComponent }
+
+    func isOpeningUnity(whenWanted isUnityWanted: Bool) -> Bool {
+        isUnityWanted && canChooseUnity
+    }
+
+    func describeLaunch(isUnityWanted: Bool) -> String {
+        guard let unity else { return ide }
+        if unity.isRunning {
+            return "\(ide) · Unity already open"
+        }
+        guard isUnityWanted else { return "\(ide) only" }
+        return unity.isInstalled ? "\(ide) + Unity \(unity.version)" : "\(ide) · Unity \(unity.version) not installed"
+    }
+}
+
+struct PanelUnityProject: Decodable {
+    let version: String
+    let isInstalled: Bool
+    let isRunning: Bool
+}

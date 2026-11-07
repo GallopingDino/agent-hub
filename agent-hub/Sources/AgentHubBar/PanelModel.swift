@@ -23,6 +23,7 @@ final class PanelModel: ObservableObject {
     @Published private(set) var notice: String?
     @Published private(set) var isRefreshing = false
     @Published private(set) var usage: [PanelAgentUsage] = []
+    @Published private(set) var recentProjects: [PanelRecentProject] = []
     @Published private(set) var isWakingUpAgents = false
     // While a name is typed, the panel's letter shortcuts must not swallow the keys.
     @Published var isEditingName = false
@@ -75,11 +76,15 @@ final class PanelModel: ObservableObject {
         isRefreshing = true
         async let freshStatus = HubClient.fetchStatus()
         async let freshUsage = HubClient.fetchUsage(isBypassingCache: false)
+        async let freshProjects = HubClient.fetchRecentProjects()
         if let fresh = await freshStatus {
             status = fresh
         }
         if let fresh = await freshUsage {
             usage = fresh
+        }
+        if let fresh = await freshProjects {
+            recentProjects = fresh
         }
         isRefreshing = false
     }
@@ -120,6 +125,15 @@ final class PanelModel: ObservableObject {
         let isOpeningFiles = isOpeningEditedFilesOnFocus
         onLeavingForEditor?()
         Task { await HubClient.showAgent(session, isOpeningEditedFiles: isOpeningFiles) }
+    }
+
+    func openProject(_ project: PanelRecentProject, isUnityWanted: Bool) {
+        let isOpeningUnity = project.isOpeningUnity(whenWanted: isUnityWanted)
+        onLeavingForEditor?()
+        Task {
+            showNotice(await HubClient.openProject(project, isOpeningUnity: isOpeningUnity))
+            await refresh()
+        }
     }
 
     func openArtifact(_ session: PanelSession) {

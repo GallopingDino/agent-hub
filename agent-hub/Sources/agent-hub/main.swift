@@ -14,6 +14,8 @@ usage:
   agent-hub open-artifact <session>  open the last artifact the agent published
   agent-hub focus-unity <session|clone>  bring the clone's Unity editor to the front
   agent-hub rename <session> <new name>  rename a session (Claude Code: types /rename into its tab)
+  agent-hub projects [--json]     projects the IDEs remember that are closed now, most recent first
+  agent-hub open-project <directory> [--with-unity]  open a remembered project in its IDE, and its Unity editor
 
 <session> is a session name, a session id prefix or a pid.
 """
@@ -119,6 +121,23 @@ case "focus-unity":
     let clone = status.clones.first { $0.name.caseInsensitiveCompare(query) == .orderedSame }
     guard let unityPid = clone?.unityPid ?? findSession(query, in: status.sessions)?.unityPid else { exitWithError("no open Unity editor for '\(query)'") }
     guard UnityEditorActivator.activate(pid: unityPid) else { exitWithError("could not activate Unity editor pid \(unityPid)") }
+
+case "projects":
+    let projects = RecentProjectsReader.read()
+    if arguments.contains("--json") {
+        printJson(projects)
+    }
+    else {
+        for project in projects {
+            print([project.name, project.ide, project.unity.map { "Unity \($0.version)" }, project.directory].compactMap { $0 }.joined(separator: "  "))
+        }
+    }
+
+case "open-project":
+    guard arguments.count >= 2 else { exitWithError(usage) }
+    if let failure = ProjectOpener.open(directory: arguments[1], isOpeningUnity: arguments.contains("--with-unity")) {
+        exitWithError(failure)
+    }
 
 default:
     print(usage)

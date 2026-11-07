@@ -30,6 +30,19 @@ enum HubClient {
         return try? decoder.decode([PanelAgentUsage].self, from: output)
     }
 
+    static func fetchRecentProjects() async -> [PanelRecentProject]? {
+        guard let output = await run(["projects", "--json"]).output else { return nil }
+        return try? JSONDecoder().decode([PanelRecentProject].self, from: output)
+    }
+
+    // Returns nil on success, otherwise the reason agent-hub gave.
+    static func openProject(_ project: PanelRecentProject, isOpeningUnity: Bool) async -> String? {
+        let result = await run(["open-project", project.directory] + (isOpeningUnity ? ["--with-unity"] : []))
+        guard result.output == nil else { return nil }
+        let reason = result.errorText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return reason.isEmpty ? "could not open '\(project.name)'" : reason
+    }
+
     // Returns nil on success, otherwise one line per agent that stayed asleep.
     static func wakeUpAgents() async -> String? {
         let result = await run(["wake-up"])

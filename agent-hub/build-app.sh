@@ -26,8 +26,9 @@ swift build --package-path "$ROOT" -c release
 bin_dir="$(swift build --package-path "$ROOT" -c release --show-bin-path)"
 
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$bin_dir/AgentHubBar" "$bin_dir/agent-hub" "$APP/Contents/MacOS/"
+cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/"
 
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -37,6 +38,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <key>CFBundleName</key><string>Agent Hub</string>
     <key>CFBundleIdentifier</key><string>io.github.gallopingdino.agenthub</string>
     <key>CFBundleExecutable</key><string>AgentHubBar</string>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>0.1.0</string>
     <key>LSMinimumSystemVersion</key><string>14.0</string>
