@@ -32,7 +32,7 @@ Nothing in it is tied to Rider. The panel talks to a small CLI, and the CLI talk
 ```sh
 agent-hub/build-app.sh      # builds and installs ~/Applications/Agent Hub.app and ~/.local/bin/agent-hub
 rider-plugin/build.sh       # builds rider-plugin/out/agent-tabs.jar; install it in Rider via "Install Plugin from Disk"
-skills/install.sh           # links the agent skills (report-task) into ~/.claude/skills and ~/.codex/skills
+skills/install.sh           # links the agent skills (agent-hub-report-task) into ~/.claude/skills and ~/.codex/skills
 ```
 
 Requires macOS 14+, Swift, Claude Code or Codex, and Rider for the editor features.

@@ -1,5 +1,5 @@
 ---
-name: report-task
+name: agent-hub-report-task
 description: Run whenever you learn or change which tracker tasks (codes like ABC-123 or task links) the current work is for, however you learned them.
 ---
 
