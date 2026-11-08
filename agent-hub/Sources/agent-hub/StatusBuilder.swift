@@ -59,9 +59,11 @@ enum StatusBuilder {
         let openIdeProjects = IdeIntegrations.readOpenProjectDirectories()
         var worktreeCache = WorktreeChangesCache()
         let clones = clonePaths.map { path in
-            let sessionCount = sessions.filter { $0.clonePath == path }.count
+            let cloneSessions = sessions.filter { $0.clonePath == path }
+            let sessionCount = cloneSessions.count
             let stagedCount = GitInspector.countStagedFiles(in: path)
-            let isFreeCandidate = sessionCount == 0 && stagedCount == 0
+            // An inactive session, forgotten in some terminal, does not keep a clone busy.
+            let isFreeCandidate = cloneSessions.allSatisfy { $0.state == .stale } && stagedCount == 0
             let changedCount = isFreeCandidate ? worktreeCache.countChangedFiles(in: path) : nil
             return CloneState(
                 name: (path as NSString).lastPathComponent,
