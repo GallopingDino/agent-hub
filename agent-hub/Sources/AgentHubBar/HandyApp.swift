@@ -3,9 +3,11 @@ import AppKit
 // Handy (github.com/cjpais/Handy), a speech-to-text app, sometimes hangs while it starts recording and stays on screen dead.
 enum HandyApp {
     private static let bundleIdentifier = "com.pais.handy"
-    private static let startCalledMarker = "TranscribeAction::start called"
-    private static let startCompletedMarker = "TranscribeAction::start completed"
-    // A healthy start takes well under a second.
+    // Steps that end within a second when Handy is healthy: starting a recording, and stopping it to hand the audio over.
+    private static let quickSteps = [
+        (beginMarker: "TranscribeAction::start called", endMarker: "TranscribeAction::start completed"),
+        (beginMarker: "Starting async transcription task", endMarker: "Recording stopped and samples retrieved"),
+    ]
     private static let hangSeconds: TimeInterval = 5
     private static let logTailBytes = 256 * 1024
     private static let exitWaitSeconds: TimeInterval = 3
@@ -14,7 +16,7 @@ enum HandyApp {
         FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/\(bundleIdentifier)/handy.log")
     }
 
-    // Frozen: the last recording start never finished, and the log has been silent since, in the Handy that runs now.
+    // Frozen: the last quick step never finished, and the log has been silent since, in the Handy that runs now.
     static func isFrozen() -> Bool {
         guard let handy = NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier).first,
               let modified = (try? FileManager.default.attributesOfItem(atPath: logFile.path))?[.modificationDate] as? Date,
@@ -22,8 +24,10 @@ enum HandyApp {
               let lines = readLogTail()
         else { return false }
 
-        guard let startIndex = lines.lastIndex(where: { $0.contains(startCalledMarker) }) else { return false }
-        if lines[startIndex...].contains(where: { $0.contains(startCompletedMarker) }) {
+        let lastBegins = quickSteps.compactMap { step in lines.lastIndex { $0.contains(step.beginMarker) }.map { (index: $0, endMarker: step.endMarker) } }
+        guard let lastBegin = lastBegins.max(by: { $0.index < $1.index }) else { return false }
+        let startIndex = lastBegin.index
+        if lines[startIndex...].contains(where: { $0.contains(lastBegin.endMarker) }) {
             return false
         }
         guard let launchDate = handy.launchDate, let startDate = readDate(of: lines[startIndex], logModified: modified, lastLine: lines.last) else { return true }
