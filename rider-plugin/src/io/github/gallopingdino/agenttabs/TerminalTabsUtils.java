@@ -166,7 +166,7 @@ final class TerminalTabsUtils {
         }
     }
 
-    private static Set<Long> collectAncestorPids(long pid) {
+    static Set<Long> collectAncestorPids(long pid) {
         Set<Long> pids = new HashSet<>();
         Optional<ProcessHandle> process = ProcessHandle.of(pid);
         while (process.isPresent()) {

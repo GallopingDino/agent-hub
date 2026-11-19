@@ -15,7 +15,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 // Remembers which terminal tab of a project runs which agent session, so they can be resumed on the next open.
 final class AgentTabsRecorder {
@@ -62,10 +61,8 @@ final class AgentTabsRecorder {
         if (shellPid == null)
             return Optional.empty();
 
-        Set<Long> tabPids = ProcessHandle.of(shellPid)
-            .map(shell -> shell.descendants().map(ProcessHandle::pid).collect(Collectors.toSet()))
-            .orElse(Set.of());
-        return liveSessions.stream().filter(session -> tabPids.contains(session.pid())).findFirst();
+        // Walks up from each agent: listing a shell's descendants scans every process on the machine, on the UI thread.
+        return liveSessions.stream().filter(session -> TerminalTabsUtils.collectAncestorPids(session.pid()).contains(shellPid)).findFirst();
     }
 
     static List<RecordedAgentTab> loadRecordedTabs(Project project) {
