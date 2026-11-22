@@ -36,7 +36,7 @@ struct PanelSession: Decodable, Identifiable {
     var isNeedingUser: Bool { state == "waiting" || state == "review" }
 
     // Claude Code is renamed by typing /rename into its terminal, which would answer a pending question instead.
-    var isRenameable: Bool { agent == "codex" || (hasTerminalTab && state != "waiting") }
+    var isRenameable: Bool { agent == "codex" || agent == "antigravity" || (hasTerminalTab && state != "waiting") }
 
     var stateOrder: Int {
         switch state {
@@ -85,7 +85,17 @@ struct PanelAgentUsage: Decodable {
 
     var isNearLimit: Bool { fiveHour?.isNearLimit == true || weekly?.isNearLimit == true }
 
-    var agentName: String { agent == "codex" ? "Codex" : "Claude Code" }
+    var agentName: String { AgentNames.displayName(of: agent) }
+}
+
+enum AgentNames {
+    static func displayName(of agent: String?) -> String {
+        switch agent {
+        case "codex": return "Codex"
+        case "antigravity": return "Antigravity"
+        default: return "Claude Code"
+        }
+    }
 }
 
 struct PanelUsageWindow: Decodable {

@@ -26,6 +26,9 @@ enum AgentUsageReader {
     private static let unavailableError = "usage unavailable"
     private static let requestTimeoutSeconds: TimeInterval = 5
     private static let codexIdleCheckDelaySeconds: TimeInterval = 1.2
+    // Gemini models share one quota group; Claude and GPT models inside Antigravity have their own.
+    private static let antigravityFiveHourBucket = "gemini-5h"
+    private static let antigravityWeeklyBucket = "gemini-weekly"
     private static let claudeUsageUrl = URL(string: "https://api.anthropic.com/api/oauth/usage")!
 
     private static var cacheFile: URL {
@@ -42,12 +45,14 @@ enum AgentUsageReader {
 
         var claude: AgentUsage?
         var codex: AgentUsage?
+        var antigravity: AgentUsage?
         let group = DispatchGroup()
         DispatchQueue.global().async(group: group) { claude = readClaudeUsage() }
         DispatchQueue.global().async(group: group) { codex = readCodexUsage() }
+        DispatchQueue.global().async(group: group) { antigravity = readAntigravityUsage() }
         group.wait()
 
-        let usage = [claude, codex].compactMap { $0 }.map { keepLastAnswer(instead: $0, from: cached) }
+        let usage = [claude, codex, antigravity].compactMap { $0 }.map { keepLastAnswer(instead: $0, from: cached) }
         saveCache(CachedUsage(checkedAt: Date(), usage: usage))
         return usage
     }
@@ -113,6 +118,26 @@ enum AgentUsageReader {
         }
         let fiveHour = isCodexWindowIdle(limits.fiveHour, client) ? nil : activeWindow(limits.fiveHour)
         return AgentUsage(agent: .codex, fiveHour: fiveHour, weekly: limits.weekly, resetCount: limits.resetCreditIds.count, error: nil)
+    }
+
+    // An agent that is not installed is left out rather than shown as an error.
+    private static func readAntigravityUsage() -> AgentUsage? {
+        guard AgentWaker.findExecutable("agy") != nil else { return nil }
+        guard let summary = AntigravityLanguageServer.withServer({ $0.call("RetrieveUserQuotaSummary", [:]) }),
+              let groups = (summary["response"] as? [String: Any])?["groups"] as? [[String: Any]] else {
+            return AgentUsage(agent: .antigravity, fiveHour: nil, weekly: nil, resetCount: nil, error: unavailableError)
+        }
+        let buckets = groups.flatMap { $0["buckets"] as? [[String: Any]] ?? [] }
+        let fiveHour = readAntigravityWindow(antigravityFiveHourBucket, in: buckets)
+        let weekly = readAntigravityWindow(antigravityWeeklyBucket, in: buckets)
+        return AgentUsage(agent: .antigravity, fiveHour: activeWindow(fiveHour), weekly: weekly, resetCount: nil, error: nil)
+    }
+
+    private static func readAntigravityWindow(_ bucketId: String, in buckets: [[String: Any]]) -> UsageWindow? {
+        guard let bucket = buckets.first(where: { $0["bucketId"] as? String == bucketId }),
+              let resetsAt = (bucket["resetTime"] as? String).flatMap(parseIsoDate) else { return nil }
+        let remaining = (bucket["remainingFraction"] as? NSNumber)?.doubleValue ?? 0
+        return UsageWindow(usedPercent: Int(((1 - remaining) * 100).rounded()), resetsAt: resetsAt)
     }
 
     // With no window running, Codex reports an unused window that resets 5 hours from the moment of asking, so its reset time moves.

@@ -21,6 +21,7 @@ enum AgentState: String, Codable {
 enum AgentKind: String, Codable {
     case claude
     case codex
+    case antigravity
 }
 
 struct AgentSession: Codable {

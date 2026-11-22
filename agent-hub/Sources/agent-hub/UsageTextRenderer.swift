@@ -18,6 +18,7 @@ enum UsageTextRenderer {
         switch agent {
         case .claude: return "Claude Code"
         case .codex: return "Codex"
+        case .antigravity: return "Antigravity"
         }
     }
 }

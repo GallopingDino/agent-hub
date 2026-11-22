@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
-// Asks the agent-hub CLI which agent sessions are running; it knows how to find both Claude Code and Codex sessions.
+// Asks the agent-hub CLI which agent sessions are running; it knows how to find Claude Code, Codex and Antigravity sessions.
 final class AgentHubCli {
     record LiveAgentSession(String agent, long pid, String sessionId, String workingDirectory, String state) {
     }
@@ -57,6 +57,7 @@ final class AgentHubCli {
     static String buildResumeCommand(String agent, String sessionId) {
         return switch (agent) {
             case "codex" -> "codex resume " + sessionId;
+            case "antigravity" -> "agy --conversation " + sessionId;
             default -> "claude --resume " + sessionId;
         };
     }

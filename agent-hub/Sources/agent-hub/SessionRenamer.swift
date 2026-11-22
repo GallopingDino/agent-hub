@@ -8,6 +8,7 @@ enum SessionRenamer {
         switch session.agent {
         case .claude: return renameClaudeSession(session, to: newName)
         case .codex: return CodexSessionReader.rename(session.sessionId, to: newName) ? nil : "the Codex app server did not accept the new name"
+        case .antigravity: return AntigravitySessionReader.rename(session.sessionId, to: newName) ? nil : "the Antigravity language server did not accept the new name"
         }
     }
 

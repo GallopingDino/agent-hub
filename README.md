@@ -1,6 +1,6 @@
 # Agent Hub
 
-A macOS menu bar panel for running Claude Code and Codex agents across many projects. The agent monitor works next to any IDE; JetBrains Rider is the one integrated today. Optional integrations: Unity Editor, task trackers such as Asana, Claude artifacts and the Handy speech-to-text app.
+A macOS menu bar panel for running Claude Code, Codex and Antigravity (agy) agents across many projects. The agent monitor works next to any IDE; JetBrains Rider is the one integrated today. Optional integrations: Unity Editor, task trackers such as Asana, Claude artifacts and the Handy speech-to-text app.
 
 <img src="docs/panel.png" width="480" alt="Agent Hub panel">
 
@@ -12,13 +12,13 @@ Nothing in it is tied to Rider. The panel talks to a small CLI, and the CLI talk
 
 ## What it does
 
-- Lists every Claude Code and Codex session on the machine, grouped by state: needs you, working, idle, inactive.
+- Lists every Claude Code, Codex and Antigravity session on the machine, grouped by state: needs you, working, idle, inactive.
 - Opens the agent's terminal tab in the right Rider window, or the files it changed for review.
 - Brings the Unity Editor of that project to the front, so switching projects switches both editors.
-- Reopening a project in Rider resumes the Claude Code and Codex sessions it had in its terminal tabs.
+- Reopening a project in Rider resumes the agent sessions it had in its terminal tabs.
 - Reopens a closed project from the IDE's recent list; hold Option to open its Unity Editor too.
 - Closes the Rider windows and Unity Editors of projects that no agent works in any more.
-- Shows how much of the 5-hour and weekly limits Claude Code and Codex have left, flags a limit past 80%, spends a Codex usage reset, and wakes sleeping agents with one short request outside any project.
+- Shows how much of the 5-hour and weekly limits Claude Code, Codex and Antigravity have left, flags a limit past 80%, spends a Codex usage reset, and wakes sleeping agents with one short request outside any project.
 - Opens the tracker task an agent works on. Agents report their task codes and links through the `agent-hub-report-task` skill; the link pattern for a bare code is set in the settings menu.
 - Renames sessions, groups them by task or project, opens the last artifact an agent published. In task mode, drop one task on another to merge them; Split in the task's context menu undoes it.
 - Notices when the Handy speech-to-text app freezes and restarts it.
@@ -35,10 +35,10 @@ Nothing in it is tied to Rider. The panel talks to a small CLI, and the CLI talk
 ```sh
 agent-hub/build-app.sh      # builds and installs ~/Applications/Agent Hub.app and ~/.local/bin/agent-hub
 rider-plugin/build.sh       # builds rider-plugin/out/agent-tabs.jar; install it in Rider via "Install Plugin from Disk"
-skills/install.sh           # links the agent skills (agent-hub-report-task) into ~/.claude/skills and ~/.codex/skills
+skills/install.sh           # links the agent skills (agent-hub-report-task) into the user-wide skill folders of Claude Code, Codex and Antigravity
 ```
 
-Requires macOS 14+, Swift, Claude Code or Codex, and Rider for the editor features.
+Requires macOS 14+, Swift, Claude Code, Codex or Antigravity CLI, and Rider for the editor features.
 
 ## Config
 

@@ -1,16 +1,57 @@
+import Darwin
 import Foundation
 
 // The tasks an agent reported for its session: codes as its tracker writes them, or links. Kept under /tmp, the one place a
 // sandboxed Codex command may write outside its project.
 enum TaskStore {
+    private static let sessionVariableByAgentProcess = [
+        "claude": "CLAUDE_CODE_SESSION_ID",
+        "codex": "CODEX_THREAD_ID",
+        "agy": "ANTIGRAVITY_CONVERSATION_ID",
+    ]
+
     private static var directory: URL {
         URL(fileURLWithPath: "/tmp/agent-hub-\(getuid())/tasks", isDirectory: true)
     }
 
-    // Claude Code and Codex hand every command they run the id of the session it belongs to.
+    // Each agent hands the commands it runs its session id. An agent started from inside another one inherits the outer
+    // agent's variable too, so the nearest agent among the parent processes decides which variable counts.
     static func findCallingSessionId() -> String? {
         let environment = ProcessInfo.processInfo.environment
-        return [environment["CLAUDE_CODE_SESSION_ID"], environment["CODEX_THREAD_ID"]].compactMap { $0 }.first { $0.isEmpty == false }
+        var pid = getppid()
+        while pid > 1 {
+            if let name = readCommandName(of: pid), let variable = sessionVariableByAgentProcess[name], let sessionId = environment[variable], sessionId.isEmpty == false {
+                return sessionId
+            }
+            guard let parentPid = readParentPid(of: pid) else { break }
+            pid = parentPid
+        }
+        return nil
+    }
+
+    private static func readParentPid(of pid: Int32) -> Int32? {
+        var info = proc_bsdinfo()
+        let size = Int32(MemoryLayout<proc_bsdinfo>.size)
+        guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size) == size else { return nil }
+        return Int32(info.pbi_ppid)
+    }
+
+    // The name the process was started by: Claude Code's executable file is named after its version.
+    private static func readCommandName(of pid: Int32) -> String? {
+        var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
+        var size = 0
+        guard sysctl(&mib, 3, nil, &size, nil, 0) == 0, size > MemoryLayout<Int32>.size else { return nil }
+        var buffer = [UInt8](repeating: 0, count: size)
+        guard sysctl(&mib, 3, &buffer, &size, nil, 0) == 0 else { return nil }
+
+        // argc, the executable path, padding zeros, then argv[0].
+        var offset = MemoryLayout<Int32>.size
+        while offset < size, buffer[offset] != 0 { offset += 1 }
+        while offset < size, buffer[offset] == 0 { offset += 1 }
+        let start = offset
+        while offset < size, buffer[offset] != 0 { offset += 1 }
+        guard offset > start else { return nil }
+        return (String(decoding: buffer[start..<offset], as: UTF8.self) as NSString).lastPathComponent
     }
 
     // "ABC-123=https://…" names both; a lone argument is a link when it has a scheme, otherwise a code.

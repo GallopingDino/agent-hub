@@ -3,6 +3,7 @@ import Foundation
 private enum SessionSource {
     case claude(ClaudeSessionRecord, artifactUrl: String?)
     case codex(CodexSessionRecord)
+    case antigravity(AntigravitySessionRecord)
 }
 
 // What every agent reports about one session, before it is placed into a clone, a Rider tab and a state.
@@ -48,8 +49,9 @@ enum StatusBuilder {
         artifactCache.save()
 
         let codexSources = CodexSessionReader.readLiveSessions(processTable: processTable).map(SessionSource.codex)
+        let antigravitySources = AntigravitySessionReader.readLiveSessions(processTable: processTable).map(SessionSource.antigravity)
 
-        return parallelMap(claudeSources + codexSources) { source in
+        return parallelMap(claudeSources + codexSources + antigravitySources) { source in
             buildSession(observe(source), clonePaths: clonePaths, tabs: tabs, processTable: processTable, config: config)
         }
         .sorted { ($0.state.sortOrder, $0.idleSeconds) < ($1.state.sortOrder, $1.idleSeconds) }
@@ -109,6 +111,19 @@ enum StatusBuilder {
                 waitingFor: waitingFor,
                 idleSeconds: max(0, Int(Date().timeIntervalSince1970 - thread.updatedAt)),
                 lastMessage: CodexSessionReader.readLastMessage(of: thread),
+                artifactUrl: nil
+            )
+        case let .antigravity(record):
+            return ObservedSession(
+                agent: .antigravity,
+                pid: record.pid,
+                sessionId: record.conversationId,
+                workingDirectory: record.cwd,
+                name: record.title,
+                status: record.isRunning ? "busy" : nil,
+                waitingFor: nil,
+                idleSeconds: record.updatedAt.map { max(0, Int(Date().timeIntervalSince($0))) } ?? 0,
+                lastMessage: AntigravitySessionReader.readLastMessage(ofConversation: record.conversationId),
                 artifactUrl: nil
             )
         }

@@ -16,6 +16,7 @@ enum AgentWaker {
 
         var claudeFailure: String?
         var codexFailure: String?
+        var antigravityFailure: String?
         let group = DispatchGroup()
         DispatchQueue.global().async(group: group) {
             claudeFailure = wake("Claude Code", "claude", ["-p", "--no-session-persistence", "--model", "haiku", greeting])
@@ -23,10 +24,13 @@ enum AgentWaker {
         DispatchQueue.global().async(group: group) {
             codexFailure = wake("Codex", "codex", ["exec", "--ephemeral", "--skip-git-repo-check", "-c", "model_reasoning_effort=\"low\"", greeting])
         }
+        DispatchQueue.global().async(group: group) {
+            antigravityFailure = wake("Antigravity", "agy", ["-p", greeting])
+        }
         group.wait()
 
         AgentUsageReader.forgetCache()
-        return [claudeFailure, codexFailure].compactMap { $0 }
+        return [claudeFailure, codexFailure, antigravityFailure].compactMap { $0 }
     }
 
     private static func wake(_ agentName: String, _ executableName: String, _ arguments: [String]) -> String? {
@@ -39,7 +43,7 @@ enum AgentWaker {
         return nil
     }
 
-    private static func findExecutable(_ name: String) -> String? {
+    static func findExecutable(_ name: String) -> String? {
         executableDirectories
             .map { ($0 as NSString).expandingTildeInPath + "/" + name }
             .first { FileManager.default.isExecutableFile(atPath: $0) }

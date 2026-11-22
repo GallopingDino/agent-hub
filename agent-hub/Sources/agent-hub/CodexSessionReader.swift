@@ -1,4 +1,3 @@
-import Darwin
 import Foundation
 
 struct CodexSessionRecord {
@@ -26,7 +25,7 @@ enum CodexSessionReader {
 
         unpairedThreads.sort { $0.createdAt < $1.createdAt }
         for pid in unpairedPids {
-            guard let cwd = readWorkingDirectory(of: pid),
+            guard let cwd = ProcessTable.readWorkingDirectory(of: pid),
                   let index = unpairedThreads.firstIndex(where: { ProcessTable.normalize($0.cwd) == cwd }) else { continue }
             records.append(CodexSessionRecord(pid: pid, thread: unpairedThreads.remove(at: index)))
         }
@@ -52,13 +51,5 @@ enum CodexSessionReader {
               let content = payload["content"] as? [[String: Any]] else { return nil }
 
         return content.compactMap { $0["type"] as? String == "output_text" ? $0["text"] as? String : nil }.last
-    }
-
-    private static func readWorkingDirectory(of pid: Int32) -> String? {
-        var info = proc_vnodepathinfo()
-        let size = Int32(MemoryLayout<proc_vnodepathinfo>.size)
-        guard proc_pidinfo(pid, PROC_PIDVNODEPATHINFO, 0, &info, size) == size else { return nil }
-        let path = withUnsafeBytes(of: info.pvi_cdir.vip_path) { String(cString: $0.bindMemory(to: CChar.self).baseAddress!) }
-        return path.isEmpty ? nil : ProcessTable.normalize(path)
     }
 }

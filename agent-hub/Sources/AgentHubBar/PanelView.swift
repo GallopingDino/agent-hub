@@ -896,7 +896,7 @@ private struct AgentMark: View {
             .frame(width: 16, height: 16)
             .background(Circle().fill(.regularMaterial))
             .overlay(Circle().strokeBorder(Color.primary.opacity(0.18), lineWidth: 0.5))
-            .help(agent == "codex" ? "Codex" : "Claude Code")
+            .help(AgentNames.displayName(of: agent))
     }
 
     private var glyph: some View {

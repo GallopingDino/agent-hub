@@ -1,10 +1,10 @@
 #!/bin/bash
-# Links every skill in this folder into the user-wide skill folders of Claude Code and Codex, so edits here apply at once.
+# Links every skill in this folder into the user-wide skill folders of Claude Code, Codex and Antigravity, so edits here apply at once.
 set -euo pipefail
 shopt -s nullglob
 
 readonly SKILLS_DIR="$(cd "$(dirname "$0")" && pwd)"
-readonly TARGET_DIRS=("$HOME/.claude/skills" "$HOME/.codex/skills")
+readonly TARGET_DIRS=("$HOME/.claude/skills" "$HOME/.codex/skills" "$HOME/.gemini/antigravity-cli/skills")
 
 for target_dir in "${TARGET_DIRS[@]}"; do
     mkdir -p "$target_dir"

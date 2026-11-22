@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 struct ProcessTable {
@@ -7,6 +8,10 @@ struct ProcessTable {
         "cloud", "completion", "features", "doctor", "update", "plugin", "queue", "archive", "delete", "unarchive", "migrate-rollouts",
         "migrate-nfs-db", "remote-control", "app", "agents", "help",
     ]
+    private static let antigravityBackgroundCommands: Set<String> = [
+        "acp", "agent", "agents", "changelog", "help", "install", "mcp", "mic-serve", "models", "plugin", "plugins", "remote-control", "update",
+    ]
+    private static let antigravityPrintFlags: Set<String> = ["-p", "--print", "--prompt"]
 
     private let parentByPid: [Int32: Int32]
 
@@ -14,11 +19,13 @@ struct ProcessTable {
     // A process left behind by a closed terminal keeps running with no controlling terminal.
     let pidsWithoutTerminal: Set<Int32>
     let codexArgumentsByPid: [Int32: [String]]
+    let antigravityPids: Set<Int32>
 
     init() {
         var parents: [Int32: Int32] = [:]
         var unityEditors: [String: Int32] = [:]
         var codexSessions: [Int32: [String]] = [:]
+        var antigravitySessions: Set<Int32> = []
         var withoutTerminal: Set<Int32> = []
         let projectPathPattern = try! NSRegularExpression(pattern: "-projectpath\\s+(\\S+)", options: .caseInsensitive)
 
@@ -36,6 +43,9 @@ struct ProcessTable {
             if let arguments = Self.parseCodexSessionArguments(command) {
                 codexSessions[pid] = arguments
             }
+            if Self.isAntigravitySession(command) {
+                antigravitySessions.insert(pid)
+            }
 
             guard command.contains("Unity.app/Contents/MacOS/Unity") else { continue }
             let unityCommand = String(command)
@@ -51,6 +61,7 @@ struct ProcessTable {
         unityEditorPidByProject = unityEditors
         pidsWithoutTerminal = withoutTerminal
         codexArgumentsByPid = codexSessions
+        antigravityPids = antigravitySessions
     }
 
     func isDescendant(_ pid: Int32, of ancestor: Int32) -> Bool {
@@ -72,6 +83,23 @@ struct ProcessTable {
             return nil
         }
         return arguments
+    }
+
+    private static func isAntigravitySession(_ command: Substring) -> Bool {
+        let words = command.split(separator: " ").map(String.init)
+        guard let executable = words.first, (executable as NSString).lastPathComponent == "agy" else { return false }
+        if let subcommand = words.dropFirst().first, antigravityBackgroundCommands.contains(subcommand) {
+            return false
+        }
+        return words.contains(where: antigravityPrintFlags.contains) == false
+    }
+
+    static func readWorkingDirectory(of pid: Int32) -> String? {
+        var info = proc_vnodepathinfo()
+        let size = Int32(MemoryLayout<proc_vnodepathinfo>.size)
+        guard proc_pidinfo(pid, PROC_PIDVNODEPATHINFO, 0, &info, size) == size else { return nil }
+        let path = withUnsafeBytes(of: info.pvi_cdir.vip_path) { String(cString: $0.bindMemory(to: CChar.self).baseAddress!) }
+        return path.isEmpty ? nil : normalize(path)
     }
 
     static func normalize(_ path: String) -> String {

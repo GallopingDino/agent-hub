@@ -3,7 +3,7 @@
   <name>Agent Tabs</name>
   <vendor>GallopingDino</vendor>
   <version>0.7.0</version>
-  <description>Local HTTP API to list, focus and open terminal tabs in Rider project windows. Resumes a project's Claude Code and Codex sessions in their terminal tabs when the project is reopened.</description>
+  <description>Local HTTP API to list, focus and open terminal tabs in Rider project windows. Resumes a project's Claude Code, Codex and Antigravity sessions in their terminal tabs when the project is reopened.</description>
   <idea-version since-build="262"/>
 
   <dependencies>
